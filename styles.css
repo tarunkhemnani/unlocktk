@@ -1,0 +1,329 @@
+:root {
+  --circle-size: 80px;
+  --gap-x: 28px;
+  --gap-y: 18px;
+  --safe-bottom: env(safe-area-inset-bottom);
+}
+
+html, body {
+  touch-action: manipulation;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: #000;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* wallpaper layer - fixed & isolated so transforms won't affect it */
+.wallpaper-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: url('wallpaper.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  /* force its own composite layer to reduce repaint issues on iOS */
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* outer container */
+.lockscreen {
+  position: relative;
+  z-index: 2; /* above wallpaper */
+  height: 100svh;
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding-top: calc(env(safe-area-inset-top) + 84px);
+  padding-bottom: calc(var(--safe-bottom) + 8px);
+}
+
+/* inner wrapper (we animate this) */
+.lockscreen-inner {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 3;
+  -webkit-transform: translateZ(0); /* promote to layer */
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* prompt / dots */
+.prompt {
+  position: relative;
+  z-index: 3;
+  text-align: center;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.15;
+  text-shadow: 0 3px 12px rgba(0,0,0,0.6);
+  margin-bottom: 18px;
+  color: white;
+}
+
+.dots {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 28px;
+  pointer-events: none;
+  z-index: 3;
+  will-change: transform;
+}
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.25px solid #fff;
+  background: transparent;
+  transition: background .12s ease, transform .12s ease, border-color .12s ease;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.45) inset;
+}
+.dot.filled {
+  background: #fff;
+  border-color: #fff;
+  transform: scale(1.06);
+  box-shadow: none;
+}
+
+/* keypad layout */
+.keypad {
+  width: 100%;
+  max-width: 420px;
+  display: grid;
+  grid-template-columns: repeat(3, var(--circle-size));
+  gap: var(--gap-y) var(--gap-x);
+  justify-content: center;
+  align-items: center;
+  margin-top: 50px;
+  z-index: 2;
+}
+
+.key {
+  width: var(--circle-size);
+  height: var(--circle-size);
+  border-radius: 999px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.07);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  border: none;
+  color: white;
+  font-size: 32px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.35);
+  position: relative;
+  z-index: 2;
+}
+
+.key.empty {
+  background: transparent !important;
+  box-shadow: none !important;
+  cursor: default;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.key .num {
+  display: block;
+  font-weight: 600;
+  line-height: 1;
+  font-size: 34px;
+  color: white !important;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.45);
+}
+.key .letters {
+  display: block;
+  font-size: 12px;
+  color: #fff;
+  opacity: 1;
+  margin-top: 6px;
+  letter-spacing: 0.9px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.45);
+  font-weight: 600;
+}
+
+/* bottom actions positioned on the outer .lockscreen so they stay anchored at bottom */
+.bottom-actions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--safe-bottom) + 16px);
+  display:flex;
+  justify-content: space-between;
+  padding: 0 28px;
+  box-sizing: border-box;
+  z-index: 3;
+}
+.action {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 16px;
+  font-weight: 400;
+  opacity: 0.98;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* unlock overlay & homescreen preview */
+.unlock-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  pointer-events: none;
+}
+.homescreen-img {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  object-fit: cover;
+  transform-origin: center;
+  transform: scale(0.98);
+  opacity: 0;
+  filter: blur(4px) saturate(0.95);
+  z-index: 10000;
+  pointer-events: none;
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* show overlay */
+.unlock-overlay.show {
+  display: flex;
+  pointer-events: auto;
+}
+
+/* -----------------------------
+   Enhanced iPhone-like unlock
+   ----------------------------- */
+
+/* subtle shadow while the lock UI lifts */
+.lockscreen-inner {
+  transition: box-shadow 220ms ease;
+}
+.lockscreen-inner.unlocking {
+  /* large soft shadow while animating to give "lifting" impression */
+  box-shadow: 0 40px 90px rgba(0,0,0,0.55);
+  will-change: transform, opacity, filter;
+  -webkit-transform: translateZ(0);
+}
+
+/* main slide-up: snappy start, soft landing with slight overshoot */
+.lockscreen-inner.unlocking {
+  animation: lockscreenSlideUp 760ms cubic-bezier(.18,.9,.26,1) forwards;
+}
+
+/* keyframe: quick lift, slight overshoot, then out */
+@keyframes lockscreenSlideUp {
+  0% {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+    filter: blur(0);
+  }
+  40% {
+    /* fast initial movement */
+    transform: translate3d(0, -32%, 0) scale(0.997);
+    opacity: 0.98;
+  }
+  68% {
+    /* slight overshoot past final position to mimic spring */
+    transform: translate3d(0, -106%, 0) scale(0.995);
+    opacity: 0.9;
+    filter: blur(2px);
+  }
+  100% {
+    /* fully offscreen */
+    transform: translate3d(0, -110%, 0) scale(1);
+    opacity: 0;
+    filter: blur(4px);
+  }
+}
+
+/* Homescreen image: scale/overshoot/sharpen for depth */
+.unlock-overlay.show .homescreen-img {
+  animation: homescreenRevealPro 760ms cubic-bezier(.18,.9,.26,1) forwards;
+}
+
+@keyframes homescreenRevealPro {
+  0% {
+    transform: translate3d(0, 6%, 0) scale(0.96);
+    opacity: 0;
+    filter: blur(10px) saturate(.9);
+  }
+  40% {
+    transform: translate3d(0, -2%, 0) scale(1.06); /* slight overshoot scale */
+    opacity: 1;
+    filter: blur(3px) saturate(1.03);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 1;
+    filter: blur(0) saturate(1);
+  }
+}
+
+/* small fade of the prompt/dots when animating — improves perceived speed */
+.lockscreen-inner.unlocking .prompt,
+.lockscreen-inner.unlocking .dots {
+  animation: lockContentFade 340ms ease forwards;
+  animation-delay: 80ms;
+}
+@keyframes lockContentFade {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-6px); }
+}
+
+/* Wrong attempt shake */
+@keyframes passShake {
+  0%   { transform: translateX(0); }
+  6%   { transform: translateX(-20px); }
+  14%  { transform: translateX(16px); }
+  24%  { transform: translateX(-14px); }
+  36%  { transform: translateX(12px); }
+  52%  { transform: translateX(-8px); }
+  72%  { transform: translateX(6px); }
+  88%  { transform: translateX(-3px); }
+  100% { transform: translateX(0); }
+}
+.dots.wrong {
+  animation: passShake 700ms cubic-bezier(.36,.07,.19,.97);
+  transform-origin: center;
+  will-change: transform;
+}
+
+/* prefer-reduced-motion: avoid all non-essential animations */
+@media (prefers-reduced-motion: reduce) {
+  .lockscreen-inner.unlocking,
+  .unlock-overlay.show .homescreen-img,
+  .lockscreen-inner.unlocking .prompt,
+  .lockscreen-inner.unlocking .dots {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+    filter: none !important;
+  }
+}
