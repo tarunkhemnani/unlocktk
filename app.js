@@ -6,7 +6,8 @@
   const dotEls = Array.from(document.querySelectorAll('.dot'));
   const keys = Array.from(document.querySelectorAll('.key[data-num]'));
   const emergency = document.getElementById('emergency');
-  const cancelBtn = document.getElementById('cancel');
+  // keep a live reference to the cancel node (we may replace listeners later)
+  let cancelBtn = document.getElementById('cancel');
   const unlockOverlay = document.getElementById('unlockOverlay');
   const lockInner = document.querySelector('.lockscreen-inner');
   const homescreenImg = document.getElementById('homescreenImg');
@@ -24,6 +25,7 @@
   function reset() {
     code = "";
     refreshDots();
+    updateCancelText();
   }
 
   function queuePass(pass) {
@@ -196,10 +198,12 @@
     const DURATION = 700;
 
     // Force button back to "Cancel" while the shake runs
-    if (cancelBtn) cancelBtn.textContent = 'Cancel';
+    if (cancelBtn) {
+      cancelBtn.textContent = 'Cancel';
+    }
 
     dotsEl.classList.add('wrong');
-    reset();
+    reset(); // reset also updates cancel text
     setTimeout(() => {
       dotsEl.classList.remove('wrong');
     }, DURATION + 20);
@@ -225,33 +229,37 @@
     }
   }
 
-  /* ---------- Cancel/Delete button behavior (small addition) ---------- */
+  /* ---------- Cancel / Delete label logic ---------- */
   function updateCancelText() {
+    // If node reference got replaced earlier, refresh it
+    cancelBtn = document.getElementById('cancel') || cancelBtn;
     if (!cancelBtn) return;
-    // show 'Delete' when at least one digit exists, otherwise 'Cancel'
     cancelBtn.textContent = (code && code.length > 0) ? 'Delete' : 'Cancel';
   }
 
-  // replace the simple cancel listener with delete behavior when digits exist
-  if (cancelBtn) {
-    // remove existing listeners by cloning the node (safe and idempotent)
-    const newCancel = cancelBtn.cloneNode(true);
-    cancelBtn.parentNode && cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
-    // reassign reference
-    const replaced = document.getElementById('cancel');
-    replaced.addEventListener('click', (e) => {
+  // replace existing cancel listener (clone node to remove prior listeners safely)
+  function wireCancelAsDelete() {
+    const old = document.getElementById('cancel');
+    if (!old) return;
+    const cloned = old.cloneNode(true);
+    old.parentNode && old.parentNode.replaceChild(cloned, old);
+    cancelBtn = document.getElementById('cancel');
+    cancelBtn.addEventListener('click', (e) => {
       e.preventDefault();
+      // if digits present -> delete last digit
       if (code.length > 0) {
-        // behave like delete: drop last digit
         code = code.slice(0, -1);
         refreshDots();
         updateCancelText();
       } else {
-        // behave like original cancel (reset)
+        // otherwise keep original cancel behaviour (reset)
         reset();
       }
     });
   }
+
+  wireCancelAsDelete();
+  updateCancelText();
 
   function animateBrightness(el, target, duration) {
     let startTime;
@@ -280,8 +288,11 @@
     const num = k.dataset.num;
     if (!num) return;
 
+    // On pointer/touch start we brighten the key — also update Cancel text immediately
     k.addEventListener('touchstart', () => {
-      animateBrightness(k, 1.6, 80); // increased brightness
+      animateBrightness(k, 1.6, 80);
+      // show Delete immediately when user touches a key (makes it snappy)
+      updateCancelText();
     }, { passive: true });
 
     const endPress = () => {
@@ -291,6 +302,7 @@
     k.addEventListener('touchcancel', endPress);
     k.addEventListener('mouseleave', endPress);
 
+    // Click handler (adds the digit)
     k.addEventListener('click', () => {
       if (code.length >= MAX) return;
       code += num;
@@ -309,8 +321,6 @@
   });
 
   emergency && emergency.addEventListener('click', e => e.preventDefault());
-  // Note: cancel button listener was replaced above
-
   window.addEventListener('online', flushQueue);
   flushQueue();
 
