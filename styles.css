@@ -258,4 +258,16 @@ html, body {
   .lockscreen-inner { transition: none !important; transform: none !important; }
   .homescreen-img { transition: none !important; transform: none !important; filter: none !important; opacity: 1 !important; }
 }
+/* Slight nudge: move Emergency a touch further left (tuned for iPhone 15 Pro) */
+#emergency {
+  margin-left: -6px; /* main nudge */
+}
+
+/* Slightly stronger nudge on narrow screens (phones) */
+@media (max-width: 420px) {
+  #emergency {
+    margin-left: -8px;
+  }
+}
+
 
