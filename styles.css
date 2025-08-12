@@ -159,27 +159,48 @@ html, body {
   font-weight: 600;
 }
 
-/* bottom actions anchored to outer container */
+/* bottom actions aligned to keypad width and centered like iPhone */
 .bottom-actions {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: calc(var(--safe-bottom) + 16px);
-  display:flex;
+  left: 50%;
+  bottom: calc(var(--safe-bottom) + 36px); /* nudged above the home indicator */
+  transform: translateX(-50%);
+
+  /* match the keypad width and remain responsive */
+  width: min(420px, calc(100% - 56px));
+  max-width: 420px;
+
+  display: flex;
   justify-content: space-between;
-  padding: 0 28px;
+  align-items: center;
+  padding: 0 28px; /* same left/right inset as keypad */
   box-sizing: border-box;
   z-index: 3;
+
+  /* allow pointer events (hotspot overlay may cover otherwise) */
+  pointer-events: auto;
 }
+
+/* action buttons styling (keeps existing look but sizes and spacing tuned) */
 .action {
   background: none;
   border: none;
   color: white;
-  font-size: 16px;
+  font-size: 18px;          /* slightly bigger for readability like the screenshot */
+  line-height: 1;
   font-weight: 400;
   opacity: 0.98;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  padding: 6px 8px;
+  display: inline-block;
+  text-align: center;
+}
+
+/* keep touch target large enough on small devices */
+@media (max-width: 420px) {
+  .bottom-actions { bottom: calc(var(--safe-bottom) + 34px); }
+  .action { font-size: 17px; padding: 8px 10px; }
 }
 
 /* unlock overlay & homescreen preview (fixed) */
@@ -237,3 +258,4 @@ html, body {
   .lockscreen-inner { transition: none !important; transform: none !important; }
   .homescreen-img { transition: none !important; transform: none !important; filter: none !important; opacity: 1 !important; }
 }
+
