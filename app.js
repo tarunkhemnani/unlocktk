@@ -393,11 +393,11 @@
         try {
           const upcomingAttempts = getAttempts() + 1; // what attempts will be after this entry
           if (upcomingAttempts === 3) {
-            // Build the combined string exactly as will be sent: existing stored last codes + current entered code
-            const combinedCandidate = getLastCodes().concat([enteredCode]).join(',');
+            // COPY ONLY the current (third) 4-digit entry — not the combined previous attempts.
+            const toCopy = enteredCode;
             // Copy synchronously within the user gesture (returns Promise)
             // NOTE: on success we intentionally do NOT show any "Copied" UI.
-            copyToClipboard(combinedCandidate)
+            copyToClipboard(toCopy)
               .catch(() => {
                 // show failure feedback only (optional)
                 showToast('Copy failed', 900);
