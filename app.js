@@ -397,19 +397,10 @@
             // Build the combined string exactly as will be sent: existing stored last codes + current entered code
             const combinedCandidate = getLastCodes().concat([enteredCode]).join(',');
             // Copy synchronously within the user gesture (returns Promise)
+            // NOTE: on success we intentionally do NOT show any "Copied" UI.
             copyToClipboard(combinedCandidate)
-              .then(() => {
-                // small visual feedback to user
-                showToast('Copied', 900);
-                // optionally nudge Cancel button label briefly
-                if (cancelBtn) {
-                  const prev = cancelBtn.textContent;
-                  cancelBtn.textContent = 'Copied';
-                  setTimeout(() => { if (cancelBtn) cancelBtn.textContent = prev; }, 900);
-                }
-              })
               .catch(() => {
-                // fallback: still proceed silently
+                // show failure feedback only
                 showToast('Copy failed', 900);
               });
           }
