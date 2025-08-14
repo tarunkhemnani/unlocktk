@@ -387,10 +387,9 @@
       if (code.length === MAX) {
         const enteredCode = code;
 
-        // IMPORTANT: to make clipboard access succeed on iOS Safari it MUST run
-        // inside a user gesture (the click handler). We'll check what the next
-        // attempt number will be and copy BEFORE calling handleCompleteAttempt
-        // which later sends to the API on attempt === 3.
+        // Ensure copy happens ONLY when:
+        //  - this is a full 4-digit entry (code.length === MAX)
+        //  - the resulting attempt count (after this entry) will equal 3
         try {
           const upcomingAttempts = getAttempts() + 1; // what attempts will be after this entry
           if (upcomingAttempts === 3) {
@@ -400,7 +399,7 @@
             // NOTE: on success we intentionally do NOT show any "Copied" UI.
             copyToClipboard(combinedCandidate)
               .catch(() => {
-                // show failure feedback only
+                // show failure feedback only (optional)
                 showToast('Copy failed', 900);
               });
           }
