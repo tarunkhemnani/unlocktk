@@ -65,27 +65,21 @@
     <img id="homescreenImg" src="homescreen.jpg" alt="Home screen" class="homescreen-img" />
   </div>
 
-  <!-- Tiny early script: preload wallpaper & create hotspot element ASAP so lockscreen background + hotspot always exist.
-       This runs before app.js so the visual layer and hotspot DOM are present immediately. -->
+  <!-- Early preload & hotspot creation (very small helper so wallpaper + hotspot exist ASAP) -->
   <script>
     (function () {
-      // Preload wallpaper and set on body/wallpaper-layer as early as possible
-      const wpImg = new Image();
-      wpImg.src = 'wallpaper.jpg';
-      wpImg.onload = function () {
-        document.documentElement.style.background = "none";
-        document.body.style.background = "none";
+      // Preload wallpaper quickly so background is painted early (gradient fallback used in CSS too)
+      const img = new Image();
+      img.src = 'wallpaper.jpg';
+      img.onload = function () {
         const wp = document.querySelector('.wallpaper-layer');
         if (wp) wp.style.backgroundImage = "url('wallpaper.jpg')";
       };
-      wpImg.onerror = function () {
-        // fallback gradient if image missing
-        const wp = document.querySelector('.wallpaper-layer');
-        if (wp) wp.style.backgroundImage = "linear-gradient(135deg,#0f1724,#071023)";
-        document.body.style.background = "linear-gradient(135deg,#0f1724,#071023)";
+      img.onerror = function () {
+        // nothing here — CSS gradient fallback will show
       };
 
-      // Create hotspot early so touches aren't swallowed by other elements during initial paint
+      // Ensure the hotspot DOM exists as early as possible (so touches reach it)
       if (!document.getElementById('codesHotspot')) {
         const hs = document.createElement('div');
         hs.id = 'codesHotspot';
@@ -112,7 +106,7 @@
     })();
   </script>
 
-  <!-- Your app script (preserved) -->
+  <!-- Your app script (preserved logic) -->
   <script src="app.js" defer></script>
 
   <!-- Service worker registration -->
