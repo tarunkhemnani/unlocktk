@@ -16,12 +16,14 @@
 
   // --- prevent page rubber-band / scroll on iOS PWAs so UI stays static ---
   try {
-    // Prevent any touchmove that would scroll the page. passive:false is required.
-    // We still allow pointer/tap events on buttons — this only blocks the dragging/scrolling motion.
-    document.addEventListener('touchmove', function (e) {
-      // If you ever want to allow some native scrolling regions later, refine this test.
-      e.preventDefault();
-    }, { passive: false });
+    // Only enable when running as a standalone PWA (home-screen). This avoids interfering in normal browser tabs.
+    const isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+                         || window.navigator.standalone;
+    if (isStandalone) {
+      document.addEventListener('touchmove', function (e) {
+        e.preventDefault();
+      }, { passive: false });
+    }
   } catch (err) {
     // ignore if environment doesn't allow or fails
     console.warn('touchmove block failed', err);
