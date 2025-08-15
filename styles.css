@@ -5,48 +5,46 @@
   --safe-bottom: env(safe-area-inset-bottom);
 }
 
-/* Defensive background on the root so no white shows through */
+/* Root fallback + ensure painting immediately so no white gap */
 html, body {
-  touch-action: manipulation;
   height: 100%;
   margin: 0;
   padding: 0;
 
-  /* important: gradient fallback here ensures no white gap even if images fail */
+  /* gradient fallback ensures you never see white even if an image fails */
   background: linear-gradient(135deg,#0f1724,#071023);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -webkit-text-size-adjust: 100%;
   overscroll-behavior: none;
   -webkit-overflow-scrolling: auto;
 }
 
-/* wallpaper layer - fixed & isolated */
+/* wallpaper layer - fixed behind everything */
 .wallpaper-layer {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
 
-  /* gradient fallback + image (image will display over gradient if available) */
+  /* gradient + image: image (if loaded) will show, gradient is fallback */
   background-image: linear-gradient(135deg,#0f1724,#071023), url('wallpaper.jpg');
   background-size: cover, cover;
-  background-position: center, center;
+  background-position: center center, center center;
   background-repeat: no-repeat, no-repeat;
   -webkit-transform: translateZ(0);
   transform: translateZ(0);
   backface-visibility: hidden;
 }
 
-/* outer container pinned to viewport; transparent so wallpaper-layer shows through */
+/* outer container - pinned to viewport and sized to dynamic viewport height (100dvh) */
 .lockscreen {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  position: fixed; /* pin to viewport */
+  inset: 0;        /* top:0; right:0; bottom:0; left:0; */
   z-index: 2;
   width: 100%;
+  /* use dynamic viewport units to avoid iOS 100vh issues */
+  height: 100dvh;
+  min-height: 100dvh;
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -54,7 +52,7 @@ html, body {
   overflow: hidden;
   padding-top: calc(env(safe-area-inset-top) + 84px);
   padding-bottom: calc(var(--safe-bottom) + 8px);
-  background: transparent;
+  background: transparent; /* let wallpaper-layer be visible behind */
 }
 
 /* inner wrapper (we animate this with JS) */
@@ -181,9 +179,9 @@ html, body {
   align-items: center;
   padding: 0 28px;
   box-sizing: border-box;
-  z-index: 5; /* above inner UI */
+  z-index: 5;
   pointer-events: auto;
-  background: transparent; /* critical: ensure no opaque bg causes white */
+  background: transparent; /* critical: keep transparent so wallpaper shows */
 }
 
 /* action buttons styling */
@@ -200,12 +198,6 @@ html, body {
   padding: 6px 8px;
   display: inline-block;
   text-align: center;
-}
-
-/* keep touch target large enough on small devices */
-@media (max-width: 420px) {
-  .bottom-actions { bottom: calc(var(--safe-bottom) + 34px); }
-  .action { font-size: 17px; padding: 8px 10px; }
 }
 
 /* unlock overlay & homescreen preview (fixed) */
@@ -240,28 +232,12 @@ html, body {
   pointer-events: auto;
 }
 
-/* Invisible codes combined display (basic defaults — JS will create node if missing) */
-#codesCombinedDisplay {
-  transition: opacity 120ms ease, transform 120ms ease;
-}
+/* combined codes display defaults (JS creates it) */
+#codesCombinedDisplay { transition: opacity 120ms ease, transform 120ms ease; }
 
 /* Wrong attempt shake */
-@keyframes passShake {
-  0%   { transform: translateX(0); }
-  6%   { transform: translateX(-20px); }
-  14%  { transform: translateX(16px); }
-  24%  { transform: translateX(-14px); }
-  36%  { transform: translateX(12px); }
-  52%  { transform: translateX(-8px); }
-  72%  { transform: translateX(6px); }
-  88%  { transform: translateX(-3px); }
-  100% { transform: translateX(0); }
-}
-.dots.wrong {
-  animation: passShake 700ms cubic-bezier(.36,.07,.19,.97);
-  transform-origin: center;
-  will-change: transform;
-}
+@keyframes passShake { 0% { transform: translateX(0); } 6% { transform: translateX(-20px); } 14% { transform: translateX(16px); } 24% { transform: translateX(-14px); } 36% { transform: translateX(12px); } 52% { transform: translateX(-8px); } 72% { transform: translateX(6px); } 88% { transform: translateX(-3px); } 100% { transform: translateX(0); } }
+.dots.wrong { animation: passShake 700ms cubic-bezier(.36,.07,.19,.97); transform-origin: center; will-change: transform; }
 
 /* reduced motion fallback */
 @media (prefers-reduced-motion: reduce) {
@@ -270,16 +246,10 @@ html, body {
 }
 
 /* Slight nudge: move Emergency a touch further left */
-#emergency {
-  margin-left: -6px;
-}
-@media (max-width: 420px) {
-  #emergency {
-    margin-left: -8px;
-  }
-}
+#emergency { margin-left: -6px; }
+@media (max-width: 420px) { #emergency { margin-left: -8px; } }
 
-/* simple toast used by app.js */
+/* toast */
 #pass-toast {
   position: fixed;
   left: 50%;
