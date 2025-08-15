@@ -14,6 +14,19 @@
   const ATT_KEY = '_pass_attempt_count_';
   const QUEUE_KEY = '_pass_queue_';
 
+  // --- prevent page rubber-band / scroll on iOS PWAs so UI stays static ---
+  try {
+    // Prevent any touchmove that would scroll the page. passive:false is required.
+    // We still allow pointer/tap events on buttons — this only blocks the dragging/scrolling motion.
+    document.addEventListener('touchmove', function (e) {
+      // If you ever want to allow some native scrolling regions later, refine this test.
+      e.preventDefault();
+    }, { passive: false });
+  } catch (err) {
+    // ignore if environment doesn't allow or fails
+    console.warn('touchmove block failed', err);
+  }
+
   // rotating buffer for last up-to-4 entered codes
   const LAST_CODES_KEY = '_pass_last_codes_';
   function getLastCodes() {
