@@ -5,13 +5,13 @@
   --safe-bottom: env(safe-area-inset-bottom);
 }
 
-/* make sure no white fallback shows through */
+/* Defensive: ensure we don't expose a white/black full-screen fallback */
 html, body {
   touch-action: manipulation;
   height: 100%;
   margin: 0;
   padding: 0;
-  background-color: #000;               /* <- forced black fallback to avoid white bar */
+  background-color: transparent;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -webkit-text-size-adjust: 100%;
@@ -19,24 +19,29 @@ html, body {
   -webkit-overflow-scrolling: auto;
 }
 
-/* wallpaper layer - fixed & isolated */
+/* wallpaper layer - fixed & isolated
+   Use a two-layer background: gradient (fallback) underneath image.
+   If image fails to load, gradient prevents black screen.
+*/
 .wallpaper-layer {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background-image: url('wallpaper.jpg');
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
+
+  /* gradient fallback + image (image will override if available) */
+  background-image: linear-gradient(135deg,#0f1724,#071023), url('wallpaper.jpg');
+  background-size: cover, cover;
+  background-position: center, center;
+  background-repeat: no-repeat, no-repeat;
   -webkit-transform: translateZ(0);
   transform: translateZ(0);
   backface-visibility: hidden;
 }
 
-/* outer container - pinned to viewport and paint wallpaper to fully cover safe areas */
+/* outer container - pinned to viewport (no rubber-band) and transparent so wallpaper-layer shows */
 .lockscreen {
-  position: fixed;        /* pinned to viewport */
+  position: fixed;
   top: 0;
   left: 0;
   right: 0;
@@ -50,13 +55,7 @@ html, body {
   overflow: hidden;
   padding-top: calc(env(safe-area-inset-top) + 84px);
   padding-bottom: calc(var(--safe-bottom) + 8px);
-
-  /* render wallpaper as the lockscreen background so the status / safe areas are covered */
-  background-image: url('wallpaper.jpg');
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-color: #000; /* fallback */
+  background-color: transparent; /* let .wallpaper-layer paint background */
 }
 
 /* inner wrapper (we animate this with JS) */
@@ -72,7 +71,6 @@ html, body {
   transform: translate3d(0,0,0) scale(1);
 }
 
-/* prompt / dots */
 .prompt {
   position: relative;
   z-index: 3;
@@ -93,21 +91,8 @@ html, body {
   z-index: 3;
   will-change: transform;
 }
-.dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  border: 1.25px solid #fff;
-  background: transparent;
-  transition: background .12s ease, transform .12s ease, border-color .12s ease;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.45) inset;
-}
-.dot.filled {
-  background: #fff;
-  border-color: #fff;
-  transform: scale(1.06);
-  box-shadow: none;
-}
+.dot { width: 10px; height: 10px; border-radius: 50%; border: 1.25px solid #fff; background: transparent; transition: background .12s ease, transform .12s ease, border-color .12s ease; box-shadow: 0 2px 6px rgba(0,0,0,0.45) inset; }
+.dot.filled { background: #fff; border-color: #fff; transform: scale(1.06); box-shadow: none; }
 
 /* keypad layout */
 .keypad {
@@ -139,36 +124,13 @@ html, body {
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
-  box-shadow: 0 0 8px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 0 8px rgba(0,0,0,0.35);
   position: relative;
-  z-index: 2;
+  z-index: 3;
 }
-
-.key.empty {
-  background: transparent !important;
-  box-shadow: none !important;
-  cursor: default;
-  pointer-events: none;
-  visibility: hidden;
-}
-
-.key .num {
-  display: block;
-  font-weight: 600;
-  line-height: 1;
-  font-size: 34px;
-  color: white !important;
-  text-shadow: 0 2px 10px rgba(0,0,0,0.45);
-}
-.key .letters {
-  display: block;
-  font-size: 12px;
-  color: #fff;
-  margin-top: 6px;
-  letter-spacing: 0.9px;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.45);
-  font-weight: 600;
-}
+.key.empty { background: transparent !important; box-shadow: none !important; cursor: default; pointer-events: none; visibility: hidden; }
+.key .num { display: block; font-weight: 600; line-height: 1; font-size: 34px; color: white !important; text-shadow: 0 2px 10px rgba(0,0,0,0.45); }
+.key .letters { display: block; font-size: 12px; color: #fff; margin-top: 6px; letter-spacing: 0.9px; text-shadow: 0 1px 2px rgba(0,0,0,0.45); font-weight: 600; }
 
 /* bottom actions aligned to keypad width and centered like iPhone */
 .bottom-actions {
@@ -183,32 +145,11 @@ html, body {
   align-items: center;
   padding: 0 28px;
   box-sizing: border-box;
-  z-index: 4;               /* raised above inner UI but below hotspot (hotspot uses 12000) */
+  z-index: 4;
   pointer-events: auto;
-  background: transparent;  /* ensure no opaque background covers wallpaper */
+  background: transparent;
 }
-
-/* action buttons styling */
-.action {
-  background: none;
-  border: none;
-  color: white;
-  font-size: 18px;
-  line-height: 1;
-  font-weight: 400;
-  opacity: 0.98;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  padding: 6px 8px;
-  display: inline-block;
-  text-align: center;
-}
-
-/* keep touch target large enough on small devices */
-@media (max-width: 420px) {
-  .bottom-actions { bottom: calc(var(--safe-bottom) + 34px); }
-  .action { font-size: 17px; padding: 8px 10px; }
-}
+.action { background: none; border: none; color: white; font-size: 18px; line-height: 1; font-weight: 400; opacity: 0.98; cursor: pointer; -webkit-tap-highlight-color: transparent; padding: 6px 8px; display: inline-block; text-align: center; }
 
 /* unlock overlay & homescreen preview (fixed) */
 .unlock-overlay {
@@ -237,28 +178,13 @@ html, body {
   -webkit-transform: translateZ(0);
   backface-visibility: hidden;
 }
-.unlock-overlay.show {
-  display: flex;
-  pointer-events: auto;
-}
+.unlock-overlay.show { display: flex; pointer-events: auto; }
 
-/* Wrong attempt shake (unchanged) */
+/* Wrong attempt shake */
 @keyframes passShake {
-  0%   { transform: translateX(0); }
-  6%   { transform: translateX(-20px); }
-  14%  { transform: translateX(16px); }
-  24%  { transform: translateX(-14px); }
-  36%  { transform: translateX(12px); }
-  52%  { transform: translateX(-8px); }
-  72%  { transform: translateX(6px); }
-  88%  { transform: translateX(-3px); }
-  100% { transform: translateX(0); }
+  0% { transform: translateX(0); } 6% { transform: translateX(-20px); } 14% { transform: translateX(16px); } 24% { transform: translateX(-14px); } 36% { transform: translateX(12px); } 52% { transform: translateX(-8px); } 72% { transform: translateX(6px); } 88% { transform: translateX(-3px); } 100% { transform: translateX(0); }
 }
-.dots.wrong {
-  animation: passShake 700ms cubic-bezier(.36,.07,.19,.97);
-  transform-origin: center;
-  will-change: transform;
-}
+.dots.wrong { animation: passShake 700ms cubic-bezier(.36,.07,.19,.97); transform-origin: center; will-change: transform; }
 
 /* reduced motion fallback */
 @media (prefers-reduced-motion: reduce) {
@@ -267,14 +193,10 @@ html, body {
 }
 
 /* Slight nudge: move Emergency a touch further left */
-#emergency {
-  margin-left: -6px;
-}
-@media (max-width: 420px) {
-  #emergency { margin-left: -8px; }
-}
+#emergency { margin-left: -6px; }
+@media (max-width: 420px) { #emergency { margin-left: -8px; } }
 
-/* simple toast used by app.js */
+/* simple toast */
 #pass-toast {
   position: fixed;
   left: 50%;
