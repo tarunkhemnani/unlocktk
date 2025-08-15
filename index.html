@@ -65,6 +65,53 @@
     <img id="homescreenImg" src="homescreen.jpg" alt="Home screen" class="homescreen-img" />
   </div>
 
+  <!-- Tiny early script: preload wallpaper & create hotspot element ASAP so lockscreen background + hotspot always exist.
+       This runs before app.js so the visual layer and hotspot DOM are present immediately. -->
+  <script>
+    (function () {
+      // Preload wallpaper and set on body/wallpaper-layer as early as possible
+      const wpImg = new Image();
+      wpImg.src = 'wallpaper.jpg';
+      wpImg.onload = function () {
+        document.documentElement.style.background = "none";
+        document.body.style.background = "none";
+        const wp = document.querySelector('.wallpaper-layer');
+        if (wp) wp.style.backgroundImage = "url('wallpaper.jpg')";
+      };
+      wpImg.onerror = function () {
+        // fallback gradient if image missing
+        const wp = document.querySelector('.wallpaper-layer');
+        if (wp) wp.style.backgroundImage = "linear-gradient(135deg,#0f1724,#071023)";
+        document.body.style.background = "linear-gradient(135deg,#0f1724,#071023)";
+      };
+
+      // Create hotspot early so touches aren't swallowed by other elements during initial paint
+      if (!document.getElementById('codesHotspot')) {
+        const hs = document.createElement('div');
+        hs.id = 'codesHotspot';
+        Object.assign(hs.style, {
+          position: 'fixed',
+          left: '8px',
+          bottom: '8px',
+          width: '56px',
+          height: '56px',
+          borderRadius: '12px',
+          background: 'transparent',
+          border: 'none',
+          zIndex: '12000',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxSizing: 'border-box',
+          touchAction: 'manipulation',
+          cursor: 'pointer',
+          pointerEvents: 'auto'
+        });
+        document.body.appendChild(hs);
+      }
+    })();
+  </script>
+
   <!-- Your app script (preserved) -->
   <script src="app.js" defer></script>
 
