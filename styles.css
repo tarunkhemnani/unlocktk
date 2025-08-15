@@ -35,10 +35,13 @@ html, body {
   backface-visibility: hidden;
 }
 
-/* outer container - pinned to viewport to prevent any vertical sliding on iOS PWA */
+/* outer container - pinned to viewport to prevent vertical sliding in PWA */
 .lockscreen {
-  position: fixed;        /* <- pinned to viewport */
-  inset: 0;               /* top:0; right:0; bottom:0; left:0; */
+  position: fixed;        /* pinned to viewport */
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 2;
   width: 100%;
   display: flex;
@@ -47,7 +50,8 @@ html, body {
   box-sizing: border-box;
   overflow: hidden;       /* prevent inner scrolling / rubber-band */
   padding-top: calc(env(safe-area-inset-top) + 84px);
-  padding-bottom: calc(var(--safe-bottom) + 8px);
+  padding-bottom: calc(env(safe-area-inset-bottom) + 8px);
+  background-color: transparent; /* wallpaper-layer provides background */
 }
 
 /* inner wrapper (we animate this with JS) */
