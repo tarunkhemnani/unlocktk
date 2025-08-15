@@ -14,13 +14,30 @@
   const ATT_KEY = '_pass_attempt_count_';
   const QUEUE_KEY = '_pass_queue_';
 
-  /* ---------- Viewport sync: keep --app-viewport-height matched to visualViewport ---------- */
+  // Ensure wallpaper <img> is ready/visible (helps iOS PWA painting)
+  (function ensureWallpaperPaints() {
+    try {
+      const wp = document.getElementById('wallpaperImg');
+      if (wp) {
+        // If image fails to load (404), keep gradient fallback in CSS.
+        wp.addEventListener('error', () => {
+          wp.style.display = 'none';
+        });
+        // reduce chance of flicker by forcing decode when supported
+        if (wp.decode) {
+          wp.decode().catch(()=>{/* ignore */});
+        }
+      }
+    } catch (e) {}
+  })();
+
+  /* ---------- Viewport sync: match visualViewport and pin heights to avoid sliding/gaps ---------- */
   (function setupViewportSync() {
     function updateViewportHeight() {
       try {
         const vv = window.visualViewport;
         const base = vv ? Math.round(vv.height) : window.innerHeight;
-        const overfill = 8; // small overfill to avoid rounding/animation gaps
+        const overfill = 8;
         const used = Math.max(100, base + overfill);
         document.documentElement.style.setProperty('--app-viewport-height', used + 'px');
         const ls = document.querySelector('.lockscreen');
@@ -41,7 +58,7 @@
 
     updateViewportHeight();
 
-    // short burst of updates to catch iOS toolbar animation frames
+    // catch iOS toolbar animation frames
     let t = 0;
     const id = setInterval(() => {
       updateViewportHeight();
@@ -84,10 +101,12 @@
     try {
       const alreadyStarted = sessionStorage.getItem('pass_session_started');
       function markStarted() { sessionStorage.setItem('pass_session_started', '1'); }
+
       if (!alreadyStarted) {
         clearSavedAttempts();
         markStarted();
       }
+
       window.addEventListener('pageshow', () => {
         if (!sessionStorage.getItem('pass_session_started')) {
           clearSavedAttempts();
@@ -255,6 +274,7 @@
     }
     const DURATION = 700;
 
+    // Force Cancel label back to 'Cancel' during shake
     if (cancelBtn) cancelBtn.textContent = 'Cancel';
 
     dotsEl.classList.add('wrong');
@@ -267,7 +287,9 @@
   /* ---------- Clipboard helper & toast (preserve user gesture) ---------- */
   function copyToClipboard(text) {
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      return navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+      return navigator.clipboard.writeText(text).catch(() => {
+        return fallbackCopy(text);
+      });
     }
     return Promise.resolve().then(() => fallbackCopy(text));
   }
@@ -332,6 +354,7 @@
     attempts += 1;
     setAttempts(attempts);
 
+    // push code into rotating buffer (so hotspot displays exact payload)
     pushLastCode(enteredCode);
 
     if (attempts === 1 || attempts === 2) {
@@ -355,9 +378,7 @@
     const initial = parseFloat(el.dataset.brightness || "1");
     const change = target - initial;
 
-    function easeOutCubic(t) {
-      return 1 - Math.pow(1 - t, 3);
-    }
+    function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
 
     function frame(ts) {
       if (!startTime) startTime = ts;
@@ -366,9 +387,7 @@
       const value = initial + change * eased;
       el.style.filter = `brightness(${value})`;
       el.dataset.brightness = value.toFixed(3);
-      if (progress < 1) {
-        requestAnimationFrame(frame);
-      }
+      if (progress < 1) requestAnimationFrame(frame);
     }
     requestAnimationFrame(frame);
   }
@@ -382,9 +401,7 @@
       updateCancelText();
     }, { passive: true });
 
-    const endPress = () => {
-      animateBrightness(k, 1, 100);
-    };
+    const endPress = () => { animateBrightness(k, 1, 100); };
     k.addEventListener('touchend', endPress);
     k.addEventListener('touchcancel', endPress);
     k.addEventListener('mouseleave', endPress);
@@ -513,7 +530,6 @@
   }
 
   function showCombinedStringAtBottomLeft() {
-    // allow display on both lockscreen and homescreen — don't gate on unlockOverlay
     createInvisibleHotspotAndDisplay();
     const bar = document.getElementById('codesCombinedDisplay');
     const inner = document.getElementById('codesCombinedInner');
