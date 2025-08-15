@@ -14,6 +14,10 @@ html, body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -webkit-text-size-adjust: 100%;
+
+  /* prevent overscroll / rubber-band on modern browsers */
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: auto;
 }
 
 /* wallpaper layer - fixed & isolated */
@@ -31,18 +35,17 @@ html, body {
   backface-visibility: hidden;
 }
 
-/* outer container */
+/* outer container - pinned to viewport to prevent any vertical sliding on iOS PWA */
 .lockscreen {
-  position: relative;
+  position: fixed;        /* <- pinned to viewport */
+  inset: 0;               /* top:0; right:0; bottom:0; left:0; */
   z-index: 2;
-  height: 100svh;
-  min-height: 100vh;
   width: 100%;
   display: flex;
   justify-content: center;
   align-items: flex-start;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: hidden;       /* prevent inner scrolling / rubber-band */
   padding-top: calc(env(safe-area-inset-top) + 84px);
   padding-bottom: calc(var(--safe-bottom) + 8px);
 }
