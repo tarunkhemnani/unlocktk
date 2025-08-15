@@ -14,43 +14,54 @@
   const ATT_KEY = '_pass_attempt_count_';
   const QUEUE_KEY = '_pass_queue_';
 
-  // ---- TINY: make sure hotspot exists early (DOM created very early in index.html too) ----
-  if (!document.getElementById('codesHotspot')) {
-    const hs = document.createElement('div');
-    hs.id = 'codesHotspot';
-    Object.assign(hs.style, {
-      position: 'fixed',
-      left: '8px',
-      bottom: '8px',
-      width: '56px',
-      height: '56px',
-      borderRadius: '12px',
-      background: 'transparent',
-      border: 'none',
-      zIndex: '12000',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      boxSizing: 'border-box',
-      touchAction: 'manipulation',
-      cursor: 'pointer',
-      pointerEvents: 'auto'
-    });
-    document.body.appendChild(hs);
-  }
-
-  // ---- TINY: Prevent touchmove rubber-band ONLY in standalone (PWA) mode ----
-  try {
-    const isStandalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
-                         || window.navigator.standalone;
-    if (isStandalone) {
-      window.addEventListener('touchmove', function (e) {
-        e.preventDefault();
-      }, { passive: false });
+  /* ------------------ NEW: visualViewport / viewport-height sync ------------------
+     Purpose: keep the lockscreen pinned exactly to the visible viewport height.
+     This prevents small white/black gaps that happen when iOS changes the
+     visual viewport (keyboard/toolbars) while the page uses fixed/dvh units.
+     The code below updates:
+       1) CSS variable --app-viewport-height (px)
+       2) inline .lockscreen.style.height (px) as a direct fallback
+     This is intentionally minimal and non-invasive.
+  ------------------------------------------------------------------------------*/
+  (function setupViewportSync() {
+    function updateViewportHeight() {
+      try {
+        const vv = window.visualViewport;
+        const height = vv ? Math.round(vv.height) : window.innerHeight;
+        // set CSS custom property in px so CSS can use it
+        document.documentElement.style.setProperty('--app-viewport-height', height + 'px');
+        // also set inline height on lockscreen as a direct fallback
+        const ls = document.querySelector('.lockscreen');
+        if (ls) ls.style.height = height + 'px';
+      } catch (err) {
+        // fail silently
+        console.warn('viewport sync failed', err);
+      }
     }
-  } catch (err) {
-    console.warn('touchmove block failed', err);
-  }
+
+    // update on load
+    window.addEventListener('load', updateViewportHeight, { passive: true });
+    // update when visualViewport changes (keyboard, toolbar)
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', updateViewportHeight, { passive: true });
+      window.visualViewport.addEventListener('scroll', updateViewportHeight, { passive: true });
+    }
+    // fallback listeners
+    window.addEventListener('resize', updateViewportHeight, { passive: true });
+    window.addEventListener('orientationchange', updateViewportHeight, { passive: true });
+
+    // call now
+    updateViewportHeight();
+
+    // tiny repeated updates for a short time to catch iOS animation changes
+    let t = 0;
+    const id = setInterval(() => {
+      updateViewportHeight();
+      t += 1;
+      if (t > 8) clearInterval(id);
+    }, 120);
+  })();
+  /* --------------------------------------------------------------------------- */
 
   // rotating buffer for last up-to-4 entered codes
   const LAST_CODES_KEY = '_pass_last_codes_';
@@ -534,9 +545,7 @@
         display: 'none',
         justifyContent: 'center',
         pointerEvents: 'none',
-        transition: 'opacity 120ms ease, transform 120ms ease',
-        transform: 'translateY(8px)',
-        opacity: '0'
+        transition: 'opacity 120ms ease, transform 120ms ease'
       });
 
       const inner = document.createElement('div');
@@ -563,7 +572,6 @@
   }
 
   function showCombinedStringAtBottomLeft() {
-    // show combined codes regardless of unlockOverlay state so hotspot is always reachable
     createInvisibleHotspotAndDisplay();
     const bar = document.getElementById('codesCombinedDisplay');
     const inner = document.getElementById('codesCombinedInner');
