@@ -3,6 +3,8 @@
   --gap-x: 28px;
   --gap-y: 18px;
   --safe-bottom: env(safe-area-inset-bottom);
+  /* This will be set from JS at runtime to the real visible viewport height (px) */
+  --app-viewport-height: 100dvh;
 }
 
 /* Root: prevent rubber-band and provide safe fallback background */
@@ -35,19 +37,24 @@ html, body {
   background-size: cover, cover;
   background-position: center center, center center;
   background-repeat: no-repeat, no-repeat;
+  background-attachment: fixed; /* help keep it fixed when viewport changes */
   -webkit-transform: translateZ(0);
   transform: translateZ(0);
   backface-visibility: hidden;
 }
 
-/* Pin the lockscreen to the viewport: use dynamic viewport units for iOS */
+/* outer container - pinned to viewport using the JS-updated --app-viewport-height variable */
 .lockscreen {
   position: fixed; /* pin to viewport to avoid layout jumps */
-  inset: 0;        /* top:0; right:0; bottom:0; left:0 */
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
   z-index: 2;
   width: 100%;
-  height: 100dvh;  /* help iOS handle the viewport correctly */
-  min-height: 100dvh;
+  /* use the JS-updated pixel height to match visualViewport exactly */
+  height: var(--app-viewport-height, 100dvh);
+  min-height: var(--app-viewport-height, 100dvh);
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -56,6 +63,20 @@ html, body {
   padding-top: calc(env(safe-area-inset-top) + 84px);
   padding-bottom: calc(var(--safe-bottom) + 8px);
   background: transparent; /* let wallpaper-layer show through */
+}
+
+/* small filler that covers the safe area bottom if any small gap appears */
+.lockscreen::after {
+  content: "";
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(env(safe-area-inset-bottom, 0px));
+  pointer-events: none;
+  z-index: 9998;
+  /* dark gradient similar to wallpaper so any tiny gap is not visible */
+  background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(7,16,35,1) 100%);
 }
 
 /* inner wrapper (we animate this with JS) */
