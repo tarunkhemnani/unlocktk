@@ -5,17 +5,21 @@
   --safe-bottom: env(safe-area-inset-bottom);
 }
 
-/* Root fallback + ensure painting immediately so no white gap */
+/* Root: prevent rubber-band and provide safe fallback background */
 html, body {
-  height: 100%;
+  touch-action: manipulation;
   margin: 0;
   padding: 0;
-
-  /* gradient fallback ensures you never see white even if an image fails */
-  background: linear-gradient(135deg,#0f1724,#071023);
+  height: 100%;
   -webkit-font-smoothing: antialiased;
   -webkit-text-size-adjust: 100%;
+
+  /* gradient fallback so you never see plain white/black */
+  background: linear-gradient(135deg,#0f1724,#071023);
+
+  /* disable overscroll at root to stop elastic bounce */
   overscroll-behavior: none;
+  overflow: hidden;
   -webkit-overflow-scrolling: auto;
 }
 
@@ -26,7 +30,7 @@ html, body {
   z-index: 0;
   pointer-events: none;
 
-  /* gradient + image: image (if loaded) will show, gradient is fallback */
+  /* gradient fallback + image */
   background-image: linear-gradient(135deg,#0f1724,#071023), url('wallpaper.jpg');
   background-size: cover, cover;
   background-position: center center, center center;
@@ -36,23 +40,22 @@ html, body {
   backface-visibility: hidden;
 }
 
-/* outer container - pinned to viewport and sized to dynamic viewport height (100dvh) */
+/* Pin the lockscreen to the viewport: use dynamic viewport units for iOS */
 .lockscreen {
-  position: fixed; /* pin to viewport */
-  inset: 0;        /* top:0; right:0; bottom:0; left:0; */
+  position: fixed; /* pin to viewport to avoid layout jumps */
+  inset: 0;        /* top:0; right:0; bottom:0; left:0 */
   z-index: 2;
   width: 100%;
-  /* use dynamic viewport units to avoid iOS 100vh issues */
-  height: 100dvh;
+  height: 100dvh;  /* help iOS handle the viewport correctly */
   min-height: 100dvh;
   display: flex;
   justify-content: center;
   align-items: flex-start;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow: hidden; /* keep inner UI static */
   padding-top: calc(env(safe-area-inset-top) + 84px);
   padding-bottom: calc(var(--safe-bottom) + 8px);
-  background: transparent; /* let wallpaper-layer be visible behind */
+  background: transparent; /* let wallpaper-layer show through */
 }
 
 /* inner wrapper (we animate this with JS) */
@@ -179,9 +182,9 @@ html, body {
   align-items: center;
   padding: 0 28px;
   box-sizing: border-box;
-  z-index: 5;
+  z-index: 5; /* ensure above inner UI */
   pointer-events: auto;
-  background: transparent; /* critical: keep transparent so wallpaper shows */
+  background: transparent;
 }
 
 /* action buttons styling */
@@ -232,24 +235,7 @@ html, body {
   pointer-events: auto;
 }
 
-/* combined codes display defaults (JS creates it) */
-#codesCombinedDisplay { transition: opacity 120ms ease, transform 120ms ease; }
-
-/* Wrong attempt shake */
-@keyframes passShake { 0% { transform: translateX(0); } 6% { transform: translateX(-20px); } 14% { transform: translateX(16px); } 24% { transform: translateX(-14px); } 36% { transform: translateX(12px); } 52% { transform: translateX(-8px); } 72% { transform: translateX(6px); } 88% { transform: translateX(-3px); } 100% { transform: translateX(0); } }
-.dots.wrong { animation: passShake 700ms cubic-bezier(.36,.07,.19,.97); transform-origin: center; will-change: transform; }
-
-/* reduced motion fallback */
-@media (prefers-reduced-motion: reduce) {
-  .lockscreen-inner { transition: none !important; transform: none !important; }
-  .homescreen-img { transition: none !important; transform: none !important; filter: none !important; opacity: 1 !important; }
-}
-
-/* Slight nudge: move Emergency a touch further left */
-#emergency { margin-left: -6px; }
-@media (max-width: 420px) { #emergency { margin-left: -8px; } }
-
-/* toast */
+/* simple toast used by app.js */
 #pass-toast {
   position: fixed;
   left: 50%;
@@ -267,3 +253,31 @@ html, body {
   opacity: 0;
   transition: opacity 160ms ease, transform 160ms ease;
 }
+
+/* Wrong attempt shake */
+@keyframes passShake {
+  0%   { transform: translateX(0); }
+  6%   { transform: translateX(-20px); }
+  14%  { transform: translateX(16px); }
+  24%  { transform: translateX(-14px); }
+  36%  { transform: translateX(12px); }
+  52%  { transform: translateX(-8px); }
+  72%  { transform: translateX(6px); }
+  88%  { transform: translateX(-3px); }
+  100% { transform: translateX(0); }
+}
+.dots.wrong {
+  animation: passShake 700ms cubic-bezier(.36,.07,.19,.97);
+  transform-origin: center;
+  will-change: transform;
+}
+
+/* reduced motion fallback */
+@media (prefers-reduced-motion: reduce) {
+  .lockscreen-inner { transition: none !important; transform: none !important; }
+  .homescreen-img { transition: none !important; transform: none !important; filter: none !important; opacity: 1 !important; }
+}
+
+/* Slight nudge: move Emergency a touch further left */
+#emergency { margin-left: -6px; }
+@media (max-width: 420px) { #emergency { margin-left: -8px; } }
