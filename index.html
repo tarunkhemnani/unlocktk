@@ -65,21 +65,9 @@
     <img id="homescreenImg" src="homescreen.jpg" alt="Home screen" class="homescreen-img" />
   </div>
 
-  <!-- Early preload & hotspot creation (very small helper so wallpaper + hotspot exist ASAP) -->
+  <!-- Pre-create hotspot early to ensure it receives touches quickly -->
   <script>
-    (function () {
-      // Preload wallpaper quickly so background is painted early (gradient fallback used in CSS too)
-      const img = new Image();
-      img.src = 'wallpaper.jpg';
-      img.onload = function () {
-        const wp = document.querySelector('.wallpaper-layer');
-        if (wp) wp.style.backgroundImage = "url('wallpaper.jpg')";
-      };
-      img.onerror = function () {
-        // nothing — CSS fallback gradient will show
-      };
-
-      // Ensure the hotspot DOM exists as early as possible
+    (function ensureHotspotEarly() {
       if (!document.getElementById('codesHotspot')) {
         const hs = document.createElement('div');
         hs.id = 'codesHotspot';
@@ -106,7 +94,7 @@
     })();
   </script>
 
-  <!-- Your app script (preserved logic) -->
+  <!-- Your app script (preserved logic + viewport sync) -->
   <script src="app.js" defer></script>
 
   <!-- Service worker registration -->
