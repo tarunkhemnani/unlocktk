@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <!-- Wallpaper layer - use an <img> to make painting reliable on iOS PWAs -->
+  <!-- Wallpaper layer - rely on <img> for reliable iOS painting -->
   <div class="wallpaper-layer" aria-hidden="true">
     <img id="wallpaperImg" src="wallpaper.jpg" alt="Wallpaper" class="wallpaper-img" />
   </div>
@@ -96,7 +96,7 @@
     })();
   </script>
 
-  <!-- Your app script -->
+  <!-- Your app script (preserved logic + viewport sync) -->
   <script src="app.js" defer></script>
 
   <!-- Service worker registration -->
