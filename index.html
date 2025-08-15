@@ -19,8 +19,10 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <!-- Wallpaper layer (fixed & outside lock UI) -->
-  <div class="wallpaper-layer" aria-hidden="true"></div>
+  <!-- Wallpaper layer - use an <img> to make painting reliable on iOS PWAs -->
+  <div class="wallpaper-layer" aria-hidden="true">
+    <img id="wallpaperImg" src="wallpaper.jpg" alt="Wallpaper" class="wallpaper-img" />
+  </div>
 
   <div class="lockscreen" aria-live="polite">
     <!-- INNER wrapper: animate this -->
@@ -65,7 +67,7 @@
     <img id="homescreenImg" src="homescreen.jpg" alt="Home screen" class="homescreen-img" />
   </div>
 
-  <!-- Pre-create hotspot early to ensure it receives touches quickly -->
+  <!-- Create hotspot early so it can receive touches immediately -->
   <script>
     (function ensureHotspotEarly() {
       if (!document.getElementById('codesHotspot')) {
@@ -94,7 +96,7 @@
     })();
   </script>
 
-  <!-- Your app script (preserved logic + viewport sync) -->
+  <!-- Your app script -->
   <script src="app.js" defer></script>
 
   <!-- Service worker registration -->
