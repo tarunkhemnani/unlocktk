@@ -76,10 +76,10 @@
         if (wp) wp.style.backgroundImage = "url('wallpaper.jpg')";
       };
       img.onerror = function () {
-        // nothing here — CSS gradient fallback will show
+        // nothing — CSS fallback gradient will show
       };
 
-      // Ensure the hotspot DOM exists as early as possible (so touches reach it)
+      // Ensure the hotspot DOM exists as early as possible
       if (!document.getElementById('codesHotspot')) {
         const hs = document.createElement('div');
         hs.id = 'codesHotspot';
