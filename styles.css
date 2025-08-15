@@ -27,16 +27,12 @@ html, body {
   -webkit-overflow-scrolling: auto;
 }
 
-/* wallpaper layer - fixed & behind everything */
+/* wallpaper layer - fill the entire screen so the wallpaper is visible under status/home */
 .wallpaper-layer {
   position: fixed;
-  left: env(safe-area-inset-left);
-  right: env(safe-area-inset-right);
-  top: env(safe-area-inset-top);
-  bottom: env(safe-area-inset-bottom);
+  inset: 0; /* full-bleed */
   z-index: 0;
   pointer-events: none;
-  /* fallback background in case image fails */
   background: linear-gradient(135deg,#0f1724,#071023);
   display: block;
   overflow: hidden;
@@ -78,17 +74,17 @@ html, body {
   background: transparent;
 }
 
-/* tiny bottom filler to hide micro gaps due to rounding/animation */
+/* tiny bottom filler now transparent so it won't paint a visible bar */
 .lockscreen::after {
   content: "";
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
-  height: calc(env(safe-area-inset-bottom, 0px) + 8px);
+  height: calc(env(safe-area-inset-bottom, 0px) + 4px); /* tiny overfill */
   pointer-events: none;
   z-index: 9998;
-  background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(7,16,35,1) 100%);
+  background: transparent; /* previously a gradient — now transparent so it doesn't show */
 }
 
 /* inner wrapper (we animate this with JS) */
@@ -206,7 +202,7 @@ html, body {
 .bottom-actions {
   position: absolute;
   left: 50%;
-  bottom: calc(var(--safe-bottom) + 36px); /* nudged above the home indicator */
+  bottom: calc(var(--safe-bottom) + 36px);
   transform: translateX(-50%);
   width: min(420px, calc(100% - 56px));
   max-width: 420px;
