@@ -5,23 +5,21 @@
   --safe-bottom: env(safe-area-inset-bottom);
 }
 
-/* Make html/body transparent so no black fallback shows through */
+/* make sure no white fallback shows through */
 html, body {
   touch-action: manipulation;
   height: 100%;
   margin: 0;
   padding: 0;
-  background-color: transparent; /* changed from black to transparent */
+  background-color: #000;               /* <- forced black fallback to avoid white bar */
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -webkit-text-size-adjust: 100%;
-
-  /* help block overscroll on modern browsers */
   overscroll-behavior: none;
   -webkit-overflow-scrolling: auto;
 }
 
-/* wallpaper layer - fixed & isolated (kept for compatibility) */
+/* wallpaper layer - fixed & isolated */
 .wallpaper-layer {
   position: fixed;
   inset: 0;
@@ -36,7 +34,7 @@ html, body {
   backface-visibility: hidden;
 }
 
-/* outer container - pinned to viewport and paint the same wallpaper so safe-area is covered */
+/* outer container - pinned to viewport and paint wallpaper to fully cover safe areas */
 .lockscreen {
   position: fixed;        /* pinned to viewport */
   top: 0;
@@ -49,15 +47,16 @@ html, body {
   justify-content: center;
   align-items: flex-start;
   box-sizing: border-box;
-  overflow: hidden;       /* prevent inner scrolling / rubber-band */
+  overflow: hidden;
   padding-top: calc(env(safe-area-inset-top) + 84px);
   padding-bottom: calc(var(--safe-bottom) + 8px);
 
-  /* ensure the lock UI covers the entire visible area and uses the wallpaper */
+  /* render wallpaper as the lockscreen background so the status / safe areas are covered */
   background-image: url('wallpaper.jpg');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
+  background-color: #000; /* fallback */
 }
 
 /* inner wrapper (we animate this with JS) */
@@ -70,7 +69,6 @@ html, body {
   -webkit-transform: translateZ(0);
   transform: translateZ(0);
   backface-visibility: hidden;
-  /* start with no transform so JS drives it */
   transform: translate3d(0,0,0) scale(1);
 }
 
@@ -176,30 +174,26 @@ html, body {
 .bottom-actions {
   position: absolute;
   left: 50%;
-  bottom: calc(var(--safe-bottom) + 36px); /* nudged above the home indicator */
+  bottom: calc(var(--safe-bottom) + 36px);
   transform: translateX(-50%);
-
-  /* match the keypad width and remain responsive */
   width: min(420px, calc(100% - 56px));
   max-width: 420px;
-
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 28px; /* same left/right inset as keypad */
+  padding: 0 28px;
   box-sizing: border-box;
-  z-index: 3;
-
-  /* allow pointer events (hotspot overlay may cover otherwise) */
+  z-index: 4;               /* raised above inner UI but below hotspot (hotspot uses 12000) */
   pointer-events: auto;
+  background: transparent;  /* ensure no opaque background covers wallpaper */
 }
 
-/* action buttons styling (keeps existing look but sizes and spacing tuned) */
+/* action buttons styling */
 .action {
   background: none;
   border: none;
   color: white;
-  font-size: 18px;          /* slightly bigger for readability like the screenshot */
+  font-size: 18px;
   line-height: 1;
   font-weight: 400;
   opacity: 0.98;
@@ -266,21 +260,18 @@ html, body {
   will-change: transform;
 }
 
-/* reduced motion fallback: no long or springy motion */
+/* reduced motion fallback */
 @media (prefers-reduced-motion: reduce) {
   .lockscreen-inner { transition: none !important; transform: none !important; }
   .homescreen-img { transition: none !important; transform: none !important; filter: none !important; opacity: 1 !important; }
 }
-/* Slight nudge: move Emergency a touch further left (tuned for iPhone 15 Pro) */
-#emergency {
-  margin-left: -6px; /* main nudge */
-}
 
-/* Slightly stronger nudge on narrow screens (phones) */
+/* Slight nudge: move Emergency a touch further left */
+#emergency {
+  margin-left: -6px;
+}
 @media (max-width: 420px) {
-  #emergency {
-    margin-left: -8px;
-  }
+  #emergency { margin-left: -8px; }
 }
 
 /* simple toast used by app.js */
