@@ -62,45 +62,11 @@
 
   <!-- Unlock overlay -->
   <div id="unlockOverlay" class="unlock-overlay" aria-hidden="true">
-    <!-- still using an img for the homescreen preview; if this fails we fall back to wallpaper via script -->
     <img id="homescreenImg" src="homescreen.jpg" alt="Home screen" class="homescreen-img" />
   </div>
 
   <!-- Your app script (preserved) -->
   <script src="app.js" defer></script>
-
-  <!-- Small preload/fallback for wallpaper & homescreen images to avoid black screens -->
-  <script>
-    (function () {
-      // Add a graceful fallback so a missing image doesn't leave a black screen.
-      const wp = document.querySelector('.wallpaper-layer');
-      const hsImg = document.getElementById('homescreenImg');
-
-      // Try to preload wallpaper.jpg. If it loads, set it; otherwise use a gradient fallback.
-      const img = new Image();
-      img.src = 'wallpaper.jpg';
-      img.onload = function () {
-        if (wp) wp.style.backgroundImage = "url('wallpaper.jpg')";
-      };
-      img.onerror = function () {
-        if (wp) wp.style.backgroundImage = 'linear-gradient(135deg,#0f1724,#071023)';
-      };
-
-      // If homescreen.jpg fails to load, fall back to wallpaper.jpg (or gradient)
-      if (hsImg) {
-        hsImg.addEventListener('error', function () {
-          // if wallpaper.jpg loaded, use it; otherwise use same gradient as background
-          const fallback = new Image();
-          fallback.src = 'wallpaper.jpg';
-          fallback.onload = function () { hsImg.src = 'wallpaper.jpg'; };
-          fallback.onerror = function () {
-            // hide the img so the wallpaper-layer shows through
-            hsImg.style.display = 'none';
-          };
-        });
-      }
-    })();
-  </script>
 
   <!-- Service worker registration -->
   <script>
