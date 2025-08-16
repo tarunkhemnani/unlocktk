@@ -1,4 +1,46 @@
-:root {
+/* Padlock container: static body + rotatable shackle */
+.padlock {
+    position: relative;
+    width: 24px;
+    height: 28px;
+    /* Other container styles (e.g. dynamic island positioning) remain unchanged */
+}
+
+/* Shackle: drawn with a ::before pseudo-element */
+.padlock::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 6px;  /* horizontal offset centers shackle on body */
+    width: 12px;
+    height: 12px;
+    border: 2px solid #fff;
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    /* Pivot at the right-bottom corner of the shackle (hinge point) */
+    transform-origin: right bottom; /* pivot around bottom-right:contentReference[oaicite:6]{index=6} */
+    transform: rotate(0deg);        /* locked orientation */
+    /* Smooth 420ms transform transition for unlocking */
+    transition: transform 0.42s ease; /* transition-duration sets animation time:contentReference[oaicite:7]{index=7} */
+}
+
+/* Body: static square base of the padlock */
+.padlock::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 24px;
+    height: 18px;
+    background: #fff;
+    border-radius: 3px;
+    /* The body stays fixed (no transform) */
+}
+
+/* Unlock state: rotate shackle counter-clockwise (~180°) */
+.padlock.unlocked::before {
+    transform: rotate(-170deg); /* negative = anticlockwise rotation:contentReference[oaicite:8]{index=8} */
+} implement this in my padlock opening. my styles.css :root {
   --circle-size: 80px;
   --gap-x: 28px;
   --gap-y: 18px;
@@ -366,99 +408,115 @@ html, body {
   opacity: 0;
 }
 
-/* -------------------------
-   Padlock using the existing .gloss element
-   - This draws the shackle (::before) and body (::after)
-   - No HTML changes required (re-uses <span class="gloss">)
-   ------------------------- */
+/* ---------- NEW: inline-SVG lock + shackle styles ----------
 
-.dynamic-island .gloss {
+   Approach:
+   - JS will inject an inline SVG inside .dynamic-island with
+     two named groups: .lock-body (stationary) and .lock-shackle (rotating).
+   - The shackle rotates around a left-side pivot so it appears to open
+     **toward the right** while the square body remains fixed.
+   - When JS adds `.icon-opened` to .dynamic-island, the shackle animation runs.
+   - When JS adds `.unlocked` the body visually swaps to the unlocked body
+     (can be handled by toggling a css class).
+*/
+.dynamic-island .island-lock {
   position: absolute;
-  left: 9%;
-  right: 9%;
-  top: 8%;
-  height: 36%;
-  border-radius: 999px;
+  left: 12px; /* same offset as your previous lock position */
+  top: 50%;
+  width: calc(var(--island-icon-size) * 1.6); /* body slightly larger than icon-size for visual match */
+  height: calc(var(--island-icon-size) * 1.6);
+  transform: translateY(-50%);
+  display: block;
   pointer-events: none;
-  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
-  filter: blur(5px);
-  opacity: 0.95;
-  mix-blend-mode: screen;
-
-  /* ensure the gloss remains visually behind the padlock marks by allowing pseudo elements to stack above */
-  z-index: 2;
+  z-index: 12002;
+  /* subtle smoothing */
+  -webkit-transform-origin: left center;
+  transform-origin: left center;
+  will-change: transform, opacity;
 }
 
-/* Padlock shackle (drawn with the gloss::before pseudo) */
-.dynamic-island .gloss::before {
-  content: "";
-  position: absolute;
-  /* place left side inside pill (tuned to match screenshot) */
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%) rotate(0deg);
-  width: calc(var(--island-icon-size) * 1.2);
-  height: calc(var(--island-icon-size) * 1);
-  border: 2.2px solid #ffffff;
-  border-bottom: none;
-  border-radius: 999px 999px 0 0;
-  transform-origin: left bottom; /* pivot on left bottom so it swings to right */
+/* SVG sizing inside container */
+.dynamic-island .island-lock svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* By default the shackle is positioned (unrotated) above the body */
+.dynamic-island .island-lock .lock-shackle {
+  transform-origin: 24% 36%; /* tuned pivot inside the SVG (trialed to match screenshot) */
+  transform-box: fill-box;
   transition: transform 360ms cubic-bezier(.22,.9,.29,.99);
   will-change: transform;
-  z-index: 3;
-  box-shadow: 0 1px 0 rgba(0,0,0,0.35);
-  background: transparent;
+  /* slightly heavier fill to match screenshot white */
+  fill: #ffffff;
+  stroke: none;
 }
 
-/* Padlock body (keep stationary) - drawn with gloss::after */
-.dynamic-island .gloss::after {
-  content: "";
-  position: absolute;
-  left: 14px;
-  top: calc(50% + 6px);
-  transform: translateY(-50%);
-  width: calc(var(--island-icon-size) * 0.9);
-  height: calc(var(--island-icon-size) * 0.9);
-  background: #ffffff;
-  border-radius: 3px;
-  z-index: 3;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.28);
+/* lock body stays put and is a filled rounded-sq to match screenshot look */
+.dynamic-island .island-lock .lock-body {
+  fill: #ffffff;
+  transform-origin: center;
+  transition: opacity 180ms linear;
 }
 
-/* Icon states: when JS toggles classes (.icon-opened / .unlocked) we animate the shackle */
+/* subtle shadow for body to sit on the pill */
+.dynamic-island .island-lock .lock-body-shadow {
+  fill: rgba(0,0,0,0.18);
+  opacity: 0.12;
+  transition: opacity 180ms linear;
+}
+
+/* When the dynamic island gets the 'icon-opened' class we run a
+   180° rotation-like opening of the shackle toward the right.
+
+   We use two-phase animation:
+    - quick rotate to ~200deg to mimic "swinging" pass the vertical,
+    - settle back to ~160deg (slightly less) so it looks natural.
+
+   The body does not move.
+*/
+.dynamic-island.icon-opened .island-lock .lock-shackle {
+  animation: shackleOpen 780ms cubic-bezier(.22,.9,.29,.99) forwards;
+}
+
+/* After fully unlocked we want the locked body to visually reflect unlocked state.
+   `.dynamic-island.unlocked` toggles a slightly different body path opacity so it
+   matches your screenshot (open body). If your JS also swaps the inner SVG path,
+   this will still gracefully handle it.
+*/
+.dynamic-island.unlocked .island-lock .lock-body {
+  opacity: 0.98;
+}
+.dynamic-island.unlocked .island-lock .lock-shackle {
+  fill: #ffffff;
+}
+
+/* Keyframes - big rotation to the right with overshoot then settle */
 @keyframes shackleOpen {
-  /* start closed, quick overshoot, settle near ~160deg (slightly less than 180) */
   0% {
-    transform: translateY(-50%) rotate(0deg) scale(1);
+    transform: rotate(0deg) translateX(0) translateY(0) scale(1);
   }
-  40% {
-    transform: translateY(-52%) rotate(210deg) scale(1.04); /* overshoot past vertical */
+  38% {
+    /* swing fast past vertical (overshoot) */
+    transform: rotate(200deg) translateX(10px) translateY(-2px) scale(1.03);
   }
-  75% {
-    transform: translateY(-51%) rotate(170deg) scale(1.02);
+  72% {
+    /* come back a bit to rest in open position toward the right */
+    transform: rotate(165deg) translateX(6px) translateY(-1px) scale(1.01);
   }
   100% {
-    transform: translateY(-50%) rotate(160deg) scale(1.0); /* final slightly less than 180 */
+    transform: rotate(160deg) translateX(4px) translateY(-0.5px) scale(1.0);
   }
 }
 
-/* Play the animation when the JS adds .icon-opened (your app.js does this) */
-.dynamic-island.icon-opened .gloss::before {
-  animation: shackleOpen 720ms cubic-bezier(.22,.9,.29,.99) forwards;
-  /* subtle extra emphasis */
-  box-shadow: 0 3px 2px rgba(0,0,0,0.35);
-}
-
-/* Ensure final "unlocked" class keeps shackle rotated (in case animation skipped) */
-.dynamic-island.unlocked .gloss::before {
-  transform: translateY(-50%) rotate(160deg);
-}
-
-/* While opening, body gets a tiny pop scale */
-.dynamic-island.icon-opened .gloss::after {
-  transform: translateY(-50%) scale(1.02);
+/* Small extra visual tweak: while opening, add a tiny 'pop' scale to body to sell the motion */
+.dynamic-island.icon-opened .island-lock .lock-body {
+  transform: scale(1.015);
   transition: transform 420ms cubic-bezier(.22,.9,.29,.99);
-  box-shadow: 0 3px 10px rgba(0,0,0,0.32);
+}
+.dynamic-island.icon-opened .island-lock .lock-body-shadow {
+  opacity: 0.18;
 }
 
 /* Right-side faint face icon (kept as an image background — unchanged) */
@@ -478,15 +536,28 @@ html, body {
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-opacity='0.18' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='9' cy='11' r='1.2' fill='%23ffffff' fill-opacity='0.18' stroke='none'/><circle cx='15' cy='11' r='1.2' fill='%23ffffff' fill-opacity='0.18' stroke='none'/><path d='M9 15c1.2 1 4.8 1 6 0' stroke='%23ffffff' stroke-opacity='0.18' fill='none'/></svg>");
 }
 
+/* small inner gloss bar to mimic the subtle oval highlight */
+.dynamic-island .gloss {
+  position: absolute;
+  left: 9%;
+  right: 9%;
+  top: 8%;
+  height: 36%;
+  border-radius: 999px;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+  filter: blur(5px);
+  opacity: 0.95;
+  mix-blend-mode: screen;
+}
+
 /* slightly smaller lock / face on narrow screens */
 @media (max-width: 420px){
   :root{ --island-w: 300px; --island-h: 40px; --island-radius: 26px; }
   /* reduce the icon size a touch on very narrow screens */
   :root{ --island-icon-size: 20px; }
   .dynamic-island::after{ width: var(--island-icon-size); height: var(--island-icon-size); right: 14px; background-size: var(--island-icon-size) var(--island-icon-size); }
-  .dynamic-island .gloss { left: 12%; right: 12%; top: 8%; height: 34%; filter: blur(4px); }
-  .dynamic-island .gloss::before { left: 10px; width: calc(var(--island-icon-size) * 1.0); height: calc(var(--island-icon-size) * 0.95); border-width: 2px; }
-  .dynamic-island .gloss::after { left: 12px; width: calc(var(--island-icon-size) * 0.85); height: calc(var(--island-icon-size) * 0.85); }
+  .dynamic-island .island-lock { left: 12px; width: calc(var(--island-icon-size) * 1.5); height: calc(var(--island-icon-size) * 1.5); }
 }
 
 /* accessibility tweak */
