@@ -330,7 +330,8 @@ html, body {
   position: absolute;
   left: 50%;
   top: calc(env(safe-area-inset-top, 20px) + var(--island-top-offset)); /* preserved -49px offset */
-  transform: translateX(calc(-50% - 10px)); /* ← moved the whole pill 10px to the left (only change) */
+  transform: translateX(calc(-50% - 10px)) scaleX(1);
+  transform-origin: center;
   width: var(--island-w);
   height: var(--island-h);
   border-radius: var(--island-radius);
@@ -351,6 +352,24 @@ html, body {
 
   backdrop-filter: blur(8px) saturate(0.9);
   -webkit-backdrop-filter: blur(8px) saturate(0.9);
+
+  /* transitions for the shrink/fade behavior */
+  transition: transform 520ms cubic-bezier(.22,.9,.29,.99), opacity 420ms ease;
+  will-change: transform, opacity;
+}
+
+/* Shrink state: horizontally collapse and fade out.
+   We scale X near zero so the visual shrinks horizontally from center.
+*/
+.dynamic-island.shrinking {
+  transform: translateX(calc(-50% - 10px)) scaleX(0.02);
+  opacity: 0;
+}
+
+/* subtle extra pop for the icon when it flips open */
+.dynamic-island.icon-opened::before {
+  transition: transform 180ms ease;
+  transform: translateY(-50%) scale(1.08);
 }
 
 /* left (lock) and right (face) icon containers - tuned positions and sizes */
@@ -378,13 +397,20 @@ html, body {
 /* inline SVG icons
    - lock is a solid white filled glyph (keeps crisp filled look)
    - face is a subtle faint stroke (low opacity) so it appears subdued on the right
+   - when .unlocked is applied we swap the lock glyph to the unlocked version
 */
 .dynamic-island{
   --icon-face: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-opacity='0.18' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='9' cy='11' r='1.2' fill='%23ffffff' fill-opacity='0.18' stroke='none'/><circle cx='15' cy='11' r='1.2' fill='%23ffffff' fill-opacity='0.18' stroke='none'/><path d='M9 15c1.2 1 4.8 1 6 0' stroke='%23ffffff' stroke-opacity='0.18' fill='none'/></svg>");
 }
+
+/* default locked (closed padlock) */
 .dynamic-island.locked{
-  /* explicit lock icon: filled white, slightly smaller inner path so it reads well at small sizes */
   --icon-lock: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%23ffffff' d='M17 10h-1V8a4 4 0 0 0-8 0v2H7a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1zm-3 0H10V8a2 2 0 1 1 4 0v2z'/></svg>");
+}
+
+/* unlocked glyph (visible immediately when .unlocked class is added) */
+.dynamic-island.unlocked{
+  --icon-lock: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff'><path d='M7 11V8a5 5 0 0 1 10 0h-2a3 3 0 0 0-6 0v3H7z'/><path d='M5 12h14v7a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-7z'/></svg>");
 }
 
 /* apply to the pseudo elements */
