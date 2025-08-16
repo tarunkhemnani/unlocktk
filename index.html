@@ -24,16 +24,18 @@
   </div>
 
   <div class="lockscreen" aria-live="polite">
-    <!-- DYNAMIC ISLAND: container + inner .pill (prevents sliding during scaleX) -->
+    <!-- PURE-CSS dynamic island (toggle classes: .locked / .unlocked) -->
     <div class="dynamic-island locked" aria-hidden="true">
-      <div class="pill">
-        <span class="gloss" aria-hidden="true"></span>
-      </div>
+      <span class="gloss" aria-hidden="true"></span>
     </div>
 
     <!-- INNER wrapper: animate this -->
     <div class="lockscreen-inner">
-      <div class="prompt">Swipe up for Face ID or<br>Enter Passcode</div>
+      <!-- PROMPT: pixel-tuned to match screenshot -->
+      <div class="prompt-container" aria-hidden="true">
+        <h1 class="prompt-title">Enter Passcode</h1>
+        <p class="prompt-sub">Your passcode is required<br>to enable Face ID</p>
+      </div>
 
       <!-- 4 dots (match MAX = 4) -->
       <div class="dots" id="dots" aria-hidden="true">
@@ -115,3 +117,4 @@
   </script>
 </body>
 </html>
+
