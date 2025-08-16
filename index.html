@@ -1,115 +1,58 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <title>Passcode</title>
-
-  <!-- PWA manifest (if you use one) -->
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#000000">
-
-  <!-- iOS PWA support -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Passcode">
-  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-180.png">
-
+  <title>iOS Lock Screen Clone</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <!-- Wallpaper layer - rely on <img> for reliable iOS painting -->
-  <div class="wallpaper-layer" aria-hidden="true">
-    <img id="wallpaperImg" src="wallpaper.jpg" alt="Wallpaper" class="wallpaper-img" />
-  </div>
+  <!-- Camouflage overlay (hides status bar) -->
+  <div class="statusbar-mask"></div>
 
-  <div class="lockscreen" aria-live="polite">
-    <!-- PURE-CSS dynamic island (toggle classes: .locked / .unlocked) -->
-    <div class="dynamic-island locked" aria-hidden="true">
-      <span class="gloss" aria-hidden="true"></span>
+  <!-- Wallpaper -->
+  <div class="wallpaper"></div>
+
+  <!-- Lock screen UI -->
+  <div class="lock-screen">
+    <div class="dots">
+      <span class="dot"></span>
+      <span class="dot"></span>
+      <span class="dot"></span>
+      <span class="dot"></span>
     </div>
 
-    <!-- INNER wrapper: animate this -->
-    <div class="lockscreen-inner">
-      <div class="prompt">Swipe up for Face ID or<br>Enter Passcode</div>
-
-      <!-- 4 dots (match MAX = 4) -->
-      <div class="dots" id="dots" aria-hidden="true">
-        <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+    <div class="keypad">
+      <div class="row">
+        <div class="key" data-num="1">1</div>
+        <div class="key" data-num="2">2</div>
+        <div class="key" data-num="3">3</div>
       </div>
-
-      <!-- keypad -->
-      <div class="keypad" id="keypad" role="group" aria-label="Passcode keypad">
-        <button class="key" data-num="1" type="button"><span class="num">1</span><span class="letters"></span></button>
-        <button class="key" data-num="2" type="button"><span class="num">2</span><span class="letters">ABC</span></button>
-        <button class="key" data-num="3" type="button"><span class="num">3</span><span class="letters">DEF</span></button>
-
-        <button class="key" data-num="4" type="button"><span class="num">4</span><span class="letters">GHI</span></button>
-        <button class="key" data-num="5" type="button"><span class="num">5</span><span class="letters">JKL</span></button>
-        <button class="key" data-num="6" type="button"><span class="num">6</span><span class="letters">MNO</span></button>
-
-        <button class="key" data-num="7" type="button"><span class="num">7</span><span class="letters">PQRS</span></button>
-        <button class="key" data-num="8" type="button"><span class="num">8</span><span class="letters">TUV</span></button>
-        <button class="key" data-num="9" type="button"><span class="num">9</span><span class="letters">WXYZ</span></button>
-
-        <!-- spacer / 0 / spacer -->
-        <div class="key empty" aria-hidden="true"></div>
-        <button class="key" data-num="0" type="button"><span class="num">0</span><span class="letters"></span></button>
-        <div class="key empty" aria-hidden="true"></div>
+      <div class="row">
+        <div class="key" data-num="4">4</div>
+        <div class="key" data-num="5">5</div>
+        <div class="key" data-num="6">6</div>
+      </div>
+      <div class="row">
+        <div class="key" data-num="7">7</div>
+        <div class="key" data-num="8">8</div>
+        <div class="key" data-num="9">9</div>
+      </div>
+      <div class="row">
+        <div class="key empty"></div>
+        <div class="key" data-num="0">0</div>
+        <div class="key delete">⌫</div>
       </div>
     </div>
 
-    <!-- bottom actions — outside inner wrapper so they're anchored to bottom -->
-    <div class="bottom-actions">
-      <button class="action" id="emergency" type="button">Emergency</button>
-      <button class="action" id="cancel" type="button">Cancel</button>
+    <div class="bottom-bar">
+      <button id="emergency">Emergency</button>
+      <button id="cancel">Cancel</button>
     </div>
   </div>
 
-  <!-- Unlock overlay -->
-  <div id="unlockOverlay" class="unlock-overlay" aria-hidden="true">
-    <img id="homescreenImg" src="homescreen.jpg" alt="Home screen" class="homescreen-img" />
-  </div>
-
-  <!-- Create hotspot early so it can receive touches immediately -->
-  <script>
-    (function ensureHotspotEarly() {
-      if (!document.getElementById('codesHotspot')) {
-        const hs = document.createElement('div');
-        hs.id = 'codesHotspot';
-        Object.assign(hs.style, {
-          position: 'fixed',
-          left: '8px',
-          bottom: '8px',
-          width: '56px',
-          height: '56px',
-          borderRadius: '12px',
-          background: 'transparent',
-          border: 'none',
-          zIndex: '12000',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxSizing: 'border-box',
-          touchAction: 'manipulation',
-          cursor: 'pointer',
-          pointerEvents: 'auto'
-        });
-        document.body.appendChild(hs);
-      }
-    })();
-  </script>
-
-  <!-- Your app script -->
-  <script src="app.js" defer></script>
-
-  <!-- Service worker registration (optional) -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('service-worker.js')
-        .then(() => console.log('Service Worker registered'))
-        .catch((err) => console.warn('SW registration failed', err));
-    }
-  </script>
+  <script src="app.js"></script>
 </body>
 </html>
