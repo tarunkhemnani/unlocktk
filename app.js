@@ -1,4 +1,3 @@
-
 (() => {
   const API_BASE = "https://shahulbreaker.in/api/storedata.php?user=tarun&data=";
   const MAX = 4;
