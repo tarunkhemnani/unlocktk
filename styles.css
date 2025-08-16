@@ -10,7 +10,7 @@
   --island-h: 46px;        /* slightly reduced height */
   --island-radius: 28px;   /* slightly tighter radius */
   /* NEGATIVE offset to move the pill up so it's flush with the real island */
-  --island-top-offset: -48px;
+  --island-top-offset: -49px;
 }
 
 /* Root: prevent rubber-band and provide safe fallback background */
@@ -420,6 +420,7 @@ html, body {
 }
 
 /* End Dynamic Island */
+
 
 
 
