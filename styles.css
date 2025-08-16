@@ -13,7 +13,7 @@
   --island-top-offset: -49px;
 
   /* Icon helper - change this value to scale both icons together */
-  --island-icon-size: 26px; /* slightly larger so the white lock reads bigger like your screenshot */
+  --island-icon-size: 22px;
 }
 
 /* Root: prevent rubber-band and provide safe fallback background */
@@ -366,7 +366,14 @@ html, body {
   opacity: 0;
 }
 
-/* left (lock) and right (face) icon containers - tuned positions and sizes */
+/* subtle extra pop for the icon when it flips open */
+.dynamic-island.icon-opened::before {
+  /* animation defined below - reserved class */
+}
+
+/* left (lock shackle & body) and right (face) icon containers - tuned positions and sizes */
+/* NOTE: We're using ::before as the lock icon (we animate this to "open right"). */
+/* ::after remains the face glyph on the right. */
 .dynamic-island::before,
 .dynamic-island::after{
   content: "";
@@ -374,14 +381,18 @@ html, body {
   top: 50%;
   width: var(--island-icon-size);
   height: var(--island-icon-size);
-  transform: translateY(-50%) translateX(0) rotate(0deg) scale(1);
+  /* default transform is to vertically center the glyph; animated state will add rotation/translation */
+  transform: translateY(-50%) rotate(0deg) scale(1);
+  /* We set the transform origin near the shackle pivot (left of the glyph)
+     so rotating the pseudo-element looks like the shackle opens to the right. */
+  transform-origin: 6px 10px; /* pivot near left-top of the icon */
   opacity: 0.98;
   /* drop-shadow tuned so the lock looks crisp against the pill */
   filter: drop-shadow(0 1px 0 rgba(0,0,0,0.45));
   background-repeat: no-repeat;
   background-position: center;
   background-size: var(--island-icon-size) var(--island-icon-size);
-  transition: transform 220ms cubic-bezier(.22,.9,.29,.99), left 220ms ease, opacity 160ms ease;
+  transition: transform 260ms cubic-bezier(.22,.9,.29,.99), opacity 220ms ease, background-image 90ms linear;
 }
 
 /* move icons slightly inward — matches screenshot spacing */
@@ -389,41 +400,66 @@ html, body {
 .dynamic-island::before{ left: 14px; }  /* left lock */
 .dynamic-island::after { right: 12px; } /* right face */
 
-/* inline SVG icons
-   - face is a subtle faint stroke (low opacity) so it appears subdued on the right
-   - locked and unlocked icons are provided below
+/* Inline SVG icons:
+   - face is subtle and low opacity (keeps the right hand mark).
+   - default lock (closed) is the filled white glyph (keeps crisp filled look).
+   - unlocked swap is applied via the .unlocked class (still uses background-image variable).
 */
+
+/* faint face icon on right */
 .dynamic-island{
   --icon-face: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-opacity='0.18' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='9' cy='11' r='1.2' fill='%23ffffff' fill-opacity='0.18' stroke='none'/><circle cx='15' cy='11' r='1.2' fill='%23ffffff' fill-opacity='0.18' stroke='none'/><path d='M9 15c1.2 1 4.8 1 6 0' stroke='%23ffffff' stroke-opacity='0.18' fill='none'/></svg>");
 }
 
-/* default locked (closed padlock) */
+/* default locked (closed padlock) — crisp filled white */
 .dynamic-island.locked{
   --icon-lock: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%23ffffff' d='M17 10h-1V8a4 4 0 0 0-8 0v2H7a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1zm-3 0H10V8a2 2 0 1 1 4 0v2z'/></svg>");
 }
 
-/* unlocked glyph: open-to-right padlock
-   - this SVG separates shackle and body so visually it reads 'opened to the right'
-   - fill is white to match the bright white lock in your screenshot
-*/
+/* unlocked glyph: slightly different path that reads as 'open' — retained for final frame */
 .dynamic-island.unlocked{
-  --icon-lock: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 24'><g fill='%23ffffff'><path d='M20 6a5 5 0 0 0-9.9-1H10a7 7 0 0 1 14 0v4h-4V6z' /></g><rect x='4' y='10' width='24' height='10' rx='1.5' fill='%23ffffff'/><path d='M22 4c0-1.1-0.9-2-2-2-0.7 0-1.3 0.4-1.6 1' stroke='%23ffffff' stroke-width='1.4' fill='none' transform='translate(4 2) rotate(18 12 6)'/></svg>");
+  --icon-lock: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff'><path d='M7 11V8a5 5 0 0 1 10 0h-2a3 3 0 0 0-6 0v3H7z'/><path d='M5 12h14v7a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-7z'/></svg>");
 }
 
-/* apply to the pseudo elements */
+/* APPLY the images to the pseudo elements */
 .dynamic-island::before{ background-image: var(--icon-lock); }
 .dynamic-island::after { background-image: var(--icon-face); }
 
-/* when the JS adds .icon-opened we animate the lock pseudo-element
-   - translate slightly right, a tiny rotate, and scale up so it reads larger
-   - the unlocked SVG above is used instantly (your JS swaps .unlocked class),
-     and this transform gives the opening motion (no waiting)
+/* KEYFRAMES - basic 'open-to-right' movement of the lock pseudo element.
+   The sequence:
+   - 0%: locked (no rotation)
+   - 45%: fast rotate/translate to suggest the shackle snapping open toward the right
+   - 100%: settle with a slight rotation/translation (so it doesn't look perfectly static)
 */
-.dynamic-island.icon-opened::before {
-  transform: translateY(-50%) translateX(6px) rotate(8deg) scale(1.12);
-  left: 16px; /* nudged a little so open shackle sits visually more to the right */
-  filter: drop-shadow(0 2px 0 rgba(0,0,0,0.5));
+@keyframes lockOpenAnim {
+  0% {
+    transform: translateY(-50%) rotate(0deg) scale(1);
+    opacity: 1;
+  }
+  45% {
+    transform: translateY(-50%) rotate(28deg) translateX(8px) scale(1.08);
+    opacity: 1;
+  }
+  85% {
+    transform: translateY(-50%) rotate(12deg) translateX(4px) scale(1.03);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-50%) rotate(10deg) translateX(3px) scale(1.02);
+    opacity: 1;
+  }
 }
+
+/* When the JS adds .icon-opened we run the visual open animation on the pseudo */
+.dynamic-island.icon-opened::before {
+  animation: lockOpenAnim 420ms cubic-bezier(.22,.9,.29,.99) forwards;
+  /* slight extra emphasis via shadow while opening */
+  filter: drop-shadow(0 3px 1px rgba(0,0,0,0.45));
+}
+
+/* Because we swap the background-image to the unlocked icon (via .unlocked),
+   the animation + glyph change together produce the "shackle rotates right"
+   visual while the body remains visually correct. */
 
 /* small inner gloss bar to mimic the subtle oval highlight */
 .dynamic-island .gloss {
@@ -487,7 +523,6 @@ html, body {
     width: var(--island-icon-size) !important;
     height: var(--island-icon-size) !important;
     background-size: var(--island-icon-size) var(--island-icon-size) !important;
-    transition: transform 220ms cubic-bezier(.22,.9,.29,.99) !important;
   }
 
   /* tighten inner gloss so it doesn't overflow on narrower width */
