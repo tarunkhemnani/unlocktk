@@ -24,9 +24,11 @@
   </div>
 
   <div class="lockscreen" aria-live="polite">
-    <!-- PURE-CSS dynamic island (toggle classes: .locked / .unlocked) -->
+    <!-- DYNAMIC ISLAND: container + inner .pill (prevents sliding during scaleX) -->
     <div class="dynamic-island locked" aria-hidden="true">
-      <span class="gloss" aria-hidden="true"></span>
+      <div class="pill">
+        <span class="gloss" aria-hidden="true"></span>
+      </div>
     </div>
 
     <!-- INNER wrapper: animate this -->
