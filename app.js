@@ -219,12 +219,13 @@
     homescreenImg.style.filter = 'blur(10px) saturate(0.9)';
     lockInner.style.boxShadow = '0 40px 90px rgba(0,0,0,0.55)';
 
+    // — SLOWER slide-up spring for lockInner (tuned to feel ~1s slower)
     springAnimate({
       from: 0,
       to: targetY,
-      mass: 1.05,
-      stiffness: 140,
-      damping: 16,
+      mass: 1.25,        // slightly heavier => slower
+      stiffness: 110,   // a touch lower than before
+      damping: 14,      // a touch lower damping so it stretches longer
       onUpdate: (val) => {
         const progress = Math.min(1, Math.abs(val / targetY));
         const scale = 1 - 0.003 * progress;
@@ -232,18 +233,20 @@
         lockInner.style.opacity = String(1 - Math.min(0.18, progress * 0.18));
       },
       onComplete: () => {
+        // keep final transform; we won't hide lockInner here (homescreen spring will handle finalization)
         lockInner.style.boxShadow = '';
         lockInner.style.opacity = '0';
         lockInner.style.transform = `translate3d(0, ${targetY}px, 0)`;
       }
     });
 
+    // — SLOWER homescreen spring (gently expand into home) so the whole sequence is longer
     springAnimate({
       from: 0,
       to: 1,
-      mass: 1,
-      stiffness: 80,
-      damping: 11,
+      mass: 1.05,
+      stiffness: 60,  // lower stiffness -> slower
+      damping: 9,     // lower damping -> longer duration
       onUpdate: (p) => {
         const progress = Math.max(0, Math.min(1, p));
         const raw = p;
@@ -260,24 +263,43 @@
         homescreenImg.style.filter = 'blur(0) saturate(1)';
         homescreenImg.style.opacity = '1';
 
-        // Hide the dynamic island only *after* the unlock/home animation finishes:
+        // After homescreen animation completes, wait an EXTRA 1 second,
+        // then trigger the pill shrink & hide it after its CSS transition finishes.
         if (dynamicIslandEl) {
-          // keep a tiny timeout to let the CSS shrink finish if it was running
+          const EXTRA_KEEP_MS = 1000; // user-requested extra 1 second keep
           setTimeout(() => {
-            try {
-              dynamicIslandEl.style.display = 'none';
-              dynamicIslandEl.classList.remove('shrinking', 'unlocked', 'icon-opened', 'locked');
-            } catch (e) {}
-          }, 80);
+            // trigger horizontal collapse
+            dynamicIslandEl.classList.add('shrinking');
+
+            // wait for the CSS transitionend on the dynamic island then hide / cleanup
+            const onTransEnd = (ev) => {
+              if (ev.target !== dynamicIslandEl) return;
+              dynamicIslandEl.removeEventListener('transitionend', onTransEnd);
+              try {
+                dynamicIslandEl.style.display = 'none';
+                dynamicIslandEl.classList.remove('shrinking', 'unlocked', 'icon-opened', 'locked');
+              } catch (e) { /* ignore */ }
+            };
+            dynamicIslandEl.addEventListener('transitionend', onTransEnd);
+
+            // safety hide if transitionend doesn't fire
+            setTimeout(() => {
+              try {
+                dynamicIslandEl.style.display = 'none';
+                dynamicIslandEl.classList.remove('shrinking', 'unlocked', 'icon-opened', 'locked');
+              } catch (e) {}
+            }, 1200);
+          }, EXTRA_KEEP_MS);
         }
       }
     });
 
+    // cleanup will-change flags after a while
     setTimeout(() => {
       lockInner.style.boxShadow = '';
       homescreenImg.style.willChange = '';
       lockInner.style.willChange = '';
-    }, 1200);
+    }, 1600 + 1000); // slightly longer to match slower springs
   }
 
   function animateWrongAttempt() {
@@ -379,29 +401,19 @@
       animateWrongAttempt();
     } else if (attempts === 4) {
       // Immediately show the unlocked (open) lock glyph and give it a small pop,
-      // then WAIT 1 second so the user sees the lock change, then start shrink + unlock animation.
+      // then start the unlock animation sequence (now slightly slower). The pill
+      // will remain visible and will only shrink after the homescreen animation finishes + 1s.
       if (dynamicIslandEl) {
-        // remove locked class and add unlocked so the pseudo-element swaps glyph
         dynamicIslandEl.classList.remove('locked');
         dynamicIslandEl.classList.add('unlocked', 'icon-opened');
 
-        // ensure repaint so open glyph is visible now
+        // ensure immediate repaint so the unlocked glyph is visible right away
         requestAnimationFrame(() => {
-          // do nothing immediate — wait 1000ms so user sees the open lock
-        });
-
-        // WAIT 1000ms, then run collapse + unlock animations
-        const OPEN_DELAY = 1000; // ms (the 1 second you requested)
-        setTimeout(() => {
-          // start horizontal shrink + fade (CSS handles transform timing)
-          requestAnimationFrame(() => {
-            dynamicIslandEl.classList.add('shrinking');
-          });
-          // trigger the unlock/homescreen spring animation
+          // start the unlock animation immediately (no artificial delay anymore)
           playUnlockAnimation();
-        }, OPEN_DELAY);
+        });
       } else {
-        // fallback: if island missing just run unlock animation
+        // fallback
         playUnlockAnimation();
       }
 
