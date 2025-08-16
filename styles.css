@@ -4,6 +4,11 @@
   --gap-y: 18px;
   --safe-bottom: env(safe-area-inset-bottom);
   --app-viewport-height: 100dvh; /* updated by JS at runtime */
+
+  /* Dynamic island sizing (can be tuned) */
+  --island-w: 340px;
+  --island-h: 48px;
+  --island-radius: 26px;
 }
 
 /* Root: prevent rubber-band and provide safe fallback background */
@@ -310,3 +315,92 @@ html, body {
 /* Slight nudge: move Emergency a touch further left */
 #emergency { margin-left: -6px; }
 @media (max-width: 420px) { #emergency { margin-left: -8px; } }
+
+/* =========================
+   Dynamic Island (pure CSS)
+   ========================= */
+
+/* pill base */
+.dynamic-island{
+  position: absolute;
+  left: 50%;
+  top: calc(env(safe-area-inset-top, 20px) + 8px);
+  transform: translateX(-50%);
+  width: var(--island-w);
+  height: var(--island-h);
+  border-radius: var(--island-radius);
+  pointer-events: none;
+  z-index: 12001;
+
+  /* deep black with a subtle highlight on top */
+  background:
+    radial-gradient(120% 180% at 50% -30%, rgba(255,255,255,0.10), rgba(255,255,255,0.00) 60%),
+    #000;
+
+  /* faint outer stroke + shadow + inner strokes */
+  box-shadow:
+    0 10px 28px rgba(0,0,0,0.45),
+    0 0 0 0.5px rgba(255,255,255,0.06) inset,
+    0 1px 0 rgba(255,255,255,0.06) inset;
+}
+
+/* left and right icon containers */
+.dynamic-island::before,
+.dynamic-island::after{
+  content:"";
+  position:absolute;
+  top:50%;
+  width:22px;
+  height:22px;
+  transform: translateY(-50%);
+  opacity: 0.96;
+  filter: drop-shadow(0 1px 0 rgba(255,255,255,0.12));
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+
+/* positions to match iOS placement */
+.dynamic-island::before{ left: 22px; }   /* lock icon */
+.dynamic-island::after{  right: 22px; }  /* face icon */
+
+/* inline SVG icons (data-URIs) */
+/* face icon assigned as --icon-face; lock icon varies by state (locked/unlocked) */
+.dynamic-island{
+  --icon-face: url("data:image/svg+xml;utf8,\
+  <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'>\
+    <path d='M4 8V6a2 2 0 0 1 2-2h2'/>\
+    <path d='M20 8V6a2 2 0 0 0-2-2h-2'/>\
+    <path d='M4 16v2a2 2 0 0 0 2 2h2'/>\
+    <path d='M20 16v2a2 2 0 0 1-2 2h-2'/>\
+    <circle cx='9' cy='11' r='1.2' fill='%23ffffff' stroke='none'/>\
+    <circle cx='15' cy='11' r='1.2' fill='%23ffffff' stroke='none'/>\
+    <path d='M9 15c1.2 1 4.8 1 6 0' stroke='%23ffffff' fill='none'/>\
+  </svg>");
+}
+
+/* locked / unlocked lock icons (white filled glyphs) */
+.dynamic-island.locked{
+  --icon-lock: url("data:image/svg+xml;utf8,\
+  <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff'>\
+    <path d='M17 10h-1V8a4 4 0 0 0-8 0v2H7a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1zm-3 0H10V8a2 2 0 1 1 4 0v2z'/>\
+  </svg>");
+}
+.dynamic-island.unlocked{
+  --icon-lock: url("data:image/svg+xml;utf8,\
+  <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff'>\
+    <path d='M17 10h-1V8a4 4 0 1 0-8 0h2a2 2 0 1 1 4 0v2H7a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1z'/>\
+  </svg>");
+}
+
+/* assign to pseudo-elements */
+.dynamic-island::before{ background-image: var(--icon-lock); }
+.dynamic-island::after{  background-image: var(--icon-face);  }
+
+/* responsive for smaller screens */
+@media (max-width: 420px){
+  :root{ --island-w: 300px; --island-h: 44px; --island-radius: 24px; }
+  .dynamic-island::before, .dynamic-island::after { width:20px; height:20px; left:18px; right:18px; }
+}
+
+/* End Dynamic Island */
