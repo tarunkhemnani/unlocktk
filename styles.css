@@ -5,10 +5,10 @@
   --safe-bottom: env(safe-area-inset-bottom);
   --app-viewport-height: 100dvh; /* updated by JS at runtime */
 
-  /* Dynamic island sizing (tuned to match your screenshot) */
-  --island-w: 344px;     /* tuned width — matches screenshot proportions */
-  --island-h: 42px;      /* slightly reduced height to flush with screenshot */
-  --island-radius: 28px; /* slightly tighter radius for that tight pill look */
+  /* Dynamic island sizing (tuned to screenshot) */
+  --island-w: 300px;     /* <-- reduced width so pill doesn't stretch to the sides */
+  --island-h: 42px;      /* height preserved */
+  --island-radius: 28px; /* radius preserved */
   /* NEGATIVE offset to move the pill up so it's flush with the real island */
   --island-top-offset: -49px;
 }
@@ -340,7 +340,7 @@ html, body {
     radial-gradient(80% 120% at 50% -40%, rgba(255,255,255,0.06), rgba(0,0,0,0) 45%),
     #000;
 
-  /* stronger outer shadow + thin white inner stroke for that crisp real look */
+  /* strong outer shadow + thin inner stroke */
   box-shadow:
     0 16px 36px rgba(0,0,0,0.55),
     0 0 0 1px rgba(255,255,255,0.03) inset,
@@ -356,19 +356,19 @@ html, body {
   content: "";
   position: absolute;
   top: 50%;
-  width: 24px;   /* enlarged so white lock matches screenshot */
-  height: 24px;  /* enlarged */
+  width: 22px;   /* adjusted to fit with reduced width */
+  height: 22px;
   transform: translateY(-50%);
   opacity: 0.98;
-  filter: drop-shadow(0 1px 0 rgba(0,0,0,0.45)); /* subtle inner shadow to match screenshot */
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,0.45));
   background-repeat: no-repeat;
   background-position: center;
   background-size: contain;
 }
 
 /* move icons slightly inward — matches screenshot spacing */
-.dynamic-island::before{ left: 18px; }  /* left lock */
-.dynamic-island::after { right: 18px; } /* right face */
+.dynamic-island::before{ left: 14px; }  /* left lock */
+.dynamic-island::after { right: 14px; } /* right face */
 
 /* inline SVG icons (white glyphs) */
 .dynamic-island{
