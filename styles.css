@@ -13,7 +13,7 @@
   --island-top-offset: -49px;
 
   /* Icon helper - change this value to scale both icons together */
-  --island-icon-size: 18px;
+  --island-icon-size: 22px;
 }
 
 /* Root: prevent rubber-band and provide safe fallback background */
@@ -463,3 +463,4 @@ html, body {
     filter: blur(4px) !important;
   }
 }
+
