@@ -101,6 +101,26 @@
   </script>
 
   <!-- Your app script -->
+  <!-- Add this before <script src="app.js" defer></script> -->
+<script>
+  (function ensurePadlockExists() {
+    document.addEventListener('DOMContentLoaded', () => {
+      const di = document.querySelector('.dynamic-island');
+      if (!di) return;
+      // If a padlock isn't present, create it (keeps your HTML untouched)
+      if (!di.querySelector('.padlock')) {
+        const pad = document.createElement('div');
+        pad.className = 'padlock';
+        pad.setAttribute('aria-hidden', 'true');
+        // insert after the gloss so it layers correctly
+        const gloss = di.querySelector('.gloss');
+        if (gloss && gloss.parentNode) gloss.parentNode.insertBefore(pad, gloss.nextSibling);
+        else di.appendChild(pad);
+      }
+    }, { once: true });
+  })();
+</script>
+
   <script src="app.js" defer></script>
 
   <!-- Service worker registration (optional) -->
@@ -113,3 +133,4 @@
   </script>
 </body>
 </html>
+
