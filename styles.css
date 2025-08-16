@@ -6,7 +6,7 @@
   --app-viewport-height: 100dvh; /* updated by JS at runtime */
 
   /* Dynamic island sizing (tuned to match your screenshot) */
-  --island-w: 336px;       /* tuned width */
+  --island-w: 250px;       /* tuned width */
   --island-h: 46px;        /* slightly reduced height */
   --island-radius: 28px;   /* slightly tighter radius */
   /* NEGATIVE offset to move the pill up so it's flush with the real island */
@@ -420,6 +420,7 @@ html, body {
 }
 
 /* End Dynamic Island */
+
 
 
 
