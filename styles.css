@@ -6,8 +6,8 @@
   --app-viewport-height: 100dvh; /* updated by JS at runtime */
 
   /* Dynamic island sizing (can be tuned) */
-  --island-w: 360px; /* <-- adjusted width */
-  --island-h: 54px;  /* <-- adjusted height */
+  --island-w: 340px;
+  --island-h: 48px;
   --island-radius: 26px;
 }
 
@@ -322,8 +322,8 @@ html, body {
 
 /* Tuned pill style to match screenshots */
 :root{
-  --island-w: 360px; /* <-- adjusted width */
-  --island-h: 54px;  /* <-- adjusted height */
+  --island-w: 344px;
+  --island-h: 50px;
   --island-radius: 30px;
 }
 
@@ -419,4 +419,8 @@ html, body {
 }
 @keyframes facePulse{
   0%   { transform: translateY(-50%) scale(0.98); opacity: 0.95; }
-  50%  { transform: translateY(-50%) scale(1.06); opacity: 1;
+  50%  { transform: translateY(-50%) scale(1.06); opacity: 1; }
+  100% { transform: translateY(-50%) scale(0.98); opacity: 0.95; }
+}
+
+/* End Dynamic Island */
