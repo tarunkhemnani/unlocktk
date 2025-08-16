@@ -7,9 +7,10 @@
 
   /* Dynamic island sizing (tuned to match your screenshot) */
   --island-w: 336px;       /* tuned width */
-  --island-h: 46px;        /* slightly reduced height for better match */
+  --island-h: 46px;        /* slightly reduced height */
   --island-radius: 28px;   /* slightly tighter radius */
-  --island-top-offset: 0px; /* remove the original +8px push so it's flush with safe-area top */
+  /* NEGATIVE offset to move the pill up so it's flush with the real island */
+  --island-top-offset: -12px;
 }
 
 /* Root: prevent rubber-band and provide safe fallback background */
@@ -325,7 +326,7 @@ html, body {
 .dynamic-island{
   position: absolute;
   left: 50%;
-  top: calc(env(safe-area-inset-top, 20px) + var(--island-top-offset)); /* now flush with safe-area top */
+  top: calc(env(safe-area-inset-top, 20px) + var(--island-top-offset)); /* now moved up by --island-top-offset */
   transform: translateX(-50%);
   width: var(--island-w);
   height: var(--island-h);
