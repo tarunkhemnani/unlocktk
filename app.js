@@ -271,19 +271,22 @@
         if (dynamicIslandEl) {
           const EXTRA_KEEP_MS = 1000 + extraMs;
           setTimeout(() => {
-            // trigger horizontal collapse
+            // trigger horizontal collapse (we add class on container; CSS shrinks .pill)
             dynamicIslandEl.classList.add('shrinking');
 
-            // wait for the CSS transitionend on the dynamic island then hide / cleanup
+            // ensure we listen for transitionend on the pill itself (not the container)
+            const pillEl = dynamicIslandEl.querySelector('.pill') || dynamicIslandEl;
+
             const onTransEnd = (ev) => {
-              if (ev.target !== dynamicIslandEl) return;
-              dynamicIslandEl.removeEventListener('transitionend', onTransEnd);
+              if (ev.target !== pillEl) return;
+              pillEl.removeEventListener('transitionend', onTransEnd);
               try {
                 dynamicIslandEl.style.display = 'none';
                 dynamicIslandEl.classList.remove('shrinking', 'unlocked', 'icon-opened', 'locked');
               } catch (e) { /* ignore */ }
             };
-            dynamicIslandEl.addEventListener('transitionend', onTransEnd);
+
+            pillEl.addEventListener('transitionend', onTransEnd);
 
             // safety hide if transitionend doesn't fire
             setTimeout(() => {
