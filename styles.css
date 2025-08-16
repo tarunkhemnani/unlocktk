@@ -1,4 +1,3 @@
-/* styles.css */
 :root {
   --circle-size: 80px;
   --gap-x: 28px;
@@ -331,8 +330,7 @@ html, body {
   position: absolute;
   left: 50%;
   top: calc(env(safe-area-inset-top, 20px) + var(--island-top-offset)); /* preserved -49px offset */
-  transform: translateX(calc(-50% - 10px)) scaleX(1);
-  transform-origin: center;
+  transform: translateX(calc(-50% - 10px)); /* ← moved the whole pill 10px to the left (only change) */
   width: var(--island-w);
   height: var(--island-h);
   border-radius: var(--island-radius);
@@ -353,147 +351,45 @@ html, body {
 
   backdrop-filter: blur(8px) saturate(0.9);
   -webkit-backdrop-filter: blur(8px) saturate(0.9);
-
-  /* transitions for the shrink/fade behavior */
-  transition: transform 520ms cubic-bezier(.22,.9,.29,.99), opacity 420ms ease;
-  will-change: transform, opacity;
 }
 
-/* Shrink state: horizontally collapse and fade out.
-   We scale X near zero so the visual shrinks horizontally from center.
-*/
-.dynamic-island.shrinking {
-  transform: translateX(calc(-50% - 10px)) scaleX(0.02);
-  opacity: 0;
-}
-
-/* ---------- NEW: inline-SVG lock + shackle styles ----------
-
-   Approach:
-   - JS will inject an inline SVG inside .dynamic-island with
-     two named groups: .lock-body (stationary) and .lock-shackle (rotating).
-   - The shackle rotates around a left-side pivot so it appears to open
-     **toward the right** while the square body remains fixed.
-   - When JS adds `.icon-opened` to .dynamic-island, the shackle animation runs.
-   - When JS adds `.unlocked` the body visually swaps to the unlocked body
-   (can be handled by toggling a css class).
-*/
-.dynamic-island .island-lock {
-  position: absolute;
-  left: 12px; /* same offset as your previous lock position */
-  top: 50%;
-  width: calc(var(--island-icon-size) * 1.6); /* body slightly larger than icon-size for visual match */
-  height: calc(var(--island-icon-size) * 1.6);
-  transform: translateY(-50%);
-  display: block;
-  pointer-events: none;
-  z-index: 12002;
-  /* subtle smoothing */
-  -webkit-transform-origin: left center;
-  transform-origin: left center;
-  will-change: transform, opacity;
-}
-
-/* SVG sizing inside container */
-.dynamic-island .island-lock svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-/* By default the shackle is positioned (unrotated) above the body */
-.dynamic-island .island-lock .lock-shackle {
-  transform-origin: 24% 36%; /* tuned pivot inside the SVG (trialed to match screenshot) */
-  transform-box: fill-box;
-  transition: transform 360ms cubic-bezier(.22,.9,.29,.99);
-  will-change: transform;
-  /* slightly heavier fill to match screenshot white */
-  fill: #ffffff;
-  stroke: none;
-}
-
-/* lock body stays put and is a filled rounded-sq to match screenshot look */
-.dynamic-island .island-lock .lock-body {
-  fill: #ffffff;
-  transform-origin: center;
-  transition: opacity 180ms linear;
-}
-
-/* subtle shadow for body to sit on the pill */
-.dynamic-island .island-lock .lock-body-shadow {
-  fill: rgba(0,0,0,0.18);
-  opacity: 0.12;
-  transition: opacity 180ms linear;
-}
-
-/* When the dynamic island gets the 'icon-opened' class we run a
-   180° rotation-like opening of the shackle toward the right.
-
-   We use two-phase animation:
-    - quick rotate to ~200deg to mimic "swinging" pass the vertical,
-    - settle back to ~160deg (slightly less) so it looks natural.
-
-   The body does not move.
-*/
-.dynamic-island.icon-opened .island-lock .lock-shackle {
-  animation: shackleOpen 780ms cubic-bezier(.22,.9,.29,.99) forwards;
-}
-
-/* After fully unlocked we want the locked body to visually reflect unlocked state.
-   `.dynamic-island.unlocked` toggles a slightly different body path opacity so it
-   matches your screenshot (open body). If your JS also swaps the inner SVG path,
-   this will still gracefully handle it.
-*/
-.dynamic-island.unlocked .island-lock .lock-body {
-  opacity: 0.98;
-}
-.dynamic-island.unlocked .island-lock .lock-shackle {
-  fill: #ffffff;
-}
-
-/* Keyframes - big rotation to the right with overshoot then settle */
-@keyframes shackleOpen {
-  0% {
-    transform: rotate(0deg) translateX(0) translateY(0) scale(1);
-  }
-  38% {
-    /* swing fast past vertical (overshoot) */
-    transform: rotate(200deg) translateX(10px) translateY(-2px) scale(1.03);
-  }
-  72% {
-    /* come back a bit to rest in open position toward the right */
-    transform: rotate(165deg) translateX(6px) translateY(-1px) scale(1.01);
-  }
-  100% {
-    transform: rotate(160deg) translateX(4px) translateY(-0.5px) scale(1.0);
-  }
-}
-
-/* Small extra visual tweak: while opening, add a tiny 'pop' scale to body to sell the motion */
-.dynamic-island.icon-opened .island-lock .lock-body {
-  transform: scale(1.015);
-  transition: transform 420ms cubic-bezier(.22,.9,.29,.99);
-}
-.dynamic-island.icon-opened .island-lock .lock-body-shadow {
-  opacity: 0.18;
-}
-
-/* Right-side faint face icon (kept as an image background — unchanged) */
-.dynamic-island::after {
+/* left (lock) and right (face) icon containers - tuned positions and sizes */
+.dynamic-island::before,
+.dynamic-island::after{
   content: "";
   position: absolute;
   top: 50%;
-  right: 12px;
   width: var(--island-icon-size);
   height: var(--island-icon-size);
   transform: translateY(-50%);
   opacity: 0.98;
+  /* drop-shadow tuned so the lock looks crisp against the pill */
   filter: drop-shadow(0 1px 0 rgba(0,0,0,0.45));
   background-repeat: no-repeat;
   background-position: center;
   background-size: var(--island-icon-size) var(--island-icon-size);
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-opacity='0.18' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='9' cy='11' r='1.2' fill='%23ffffff' fill-opacity='0.18' stroke='none'/><circle cx='15' cy='11' r='1.2' fill='%23ffffff' fill-opacity='0.18' stroke='none'/><path d='M9 15c1.2 1 4.8 1 6 0' stroke='%23ffffff' stroke-opacity='0.18' fill='none'/></svg>");
 }
+
+/* move icons slightly inward — matches screenshot spacing */
+/* left lock nudged a little more to avoid touching the pill curve */
+.dynamic-island::before{ left: 14px; }  /* left lock */
+.dynamic-island::after { right: 12px; } /* right face */
+
+/* inline SVG icons
+   - lock is a solid white filled glyph (keeps crisp filled look)
+   - face is a subtle faint stroke (low opacity) so it appears subdued on the right
+*/
+.dynamic-island{
+  --icon-face: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-opacity='0.18' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='9' cy='11' r='1.2' fill='%23ffffff' fill-opacity='0.18' stroke='none'/><circle cx='15' cy='11' r='1.2' fill='%23ffffff' fill-opacity='0.18' stroke='none'/><path d='M9 15c1.2 1 4.8 1 6 0' stroke='%23ffffff' stroke-opacity='0.18' fill='none'/></svg>");
+}
+.dynamic-island.locked{
+  /* explicit lock icon: filled white, slightly smaller inner path so it reads well at small sizes */
+  --icon-lock: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%23ffffff' d='M17 10h-1V8a4 4 0 0 0-8 0v2H7a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1zm-3 0H10V8a2 2 0 1 1 4 0v2z'/></svg>");
+}
+
+/* apply to the pseudo elements */
+.dynamic-island::before{ background-image: var(--icon-lock); }
+.dynamic-island::after { background-image: var(--icon-face); }
 
 /* small inner gloss bar to mimic the subtle oval highlight */
 .dynamic-island .gloss {
@@ -515,8 +411,7 @@ html, body {
   :root{ --island-w: 300px; --island-h: 40px; --island-radius: 26px; }
   /* reduce the icon size a touch on very narrow screens */
   :root{ --island-icon-size: 20px; }
-  .dynamic-island::after{ width: var(--island-icon-size); height: var(--island-icon-size); right: 14px; background-size: var(--island-icon-size) var(--island-icon-size); }
-  .dynamic-island .island-lock { left: 12px; width: calc(var(--island-icon-size) * 1.5); height: calc(var(--island-icon-size) * 1.5); }
+  .dynamic-island::before, .dynamic-island::after{ width: var(--island-icon-size); height: var(--island-icon-size); left: 14px; right: 14px; background-size: var(--island-icon-size) var(--island-icon-size); }
 }
 
 /* accessibility tweak */
