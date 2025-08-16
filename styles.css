@@ -1,3 +1,8 @@
+/* =========================
+   styles.css (full file)
+   ========================= */
+
+/* preserve your :root variables */
 :root {
   --circle-size: 80px;
   --gap-x: 28px;
@@ -27,28 +32,24 @@ html, body {
   -webkit-text-size-adjust: 100%;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
 
-  /* gradient fallback so you never see plain white/black */
   background-color: #000;
   background: linear-gradient(135deg,#0f1724,#071023);
 
-  /* disable overscroll at root to stop elastic bounce */
   overscroll-behavior: none;
   overflow: hidden;
   -webkit-overflow-scrolling: auto;
 }
 
-/* wallpaper layer - fill the entire screen so the wallpaper is visible under status/home */
+/* wallpaper layer */
 .wallpaper-layer {
   position: fixed;
-  inset: 0; /* full-bleed */
+  inset: 0;
   z-index: 0;
   pointer-events: none;
   background: linear-gradient(135deg,#0f1724,#071023);
   display: block;
   overflow: hidden;
 }
-
-/* Use an <img> so painting is reliable in iOS PWA mode */
 .wallpaper-img {
   position: absolute;
   left: 0;
@@ -64,7 +65,7 @@ html, body {
   transform: translateZ(0);
 }
 
-/* outer container pinned to viewport using JS-updated height variable */
+/* lockscreen layout */
 .lockscreen {
   position: fixed;
   left: 0;
@@ -83,21 +84,19 @@ html, body {
   padding-bottom: calc(var(--safe-bottom) + 8px);
   background: transparent;
 }
-
-/* tiny bottom filler now transparent so it won't paint a visible bar */
 .lockscreen::after {
   content: "";
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
-  height: calc(env(safe-area-inset-bottom, 0px) + 4px); /* tiny overfill */
+  height: calc(env(safe-area-inset-bottom, 0px) + 4px);
   pointer-events: none;
   z-index: 9998;
   background: transparent;
 }
 
-/* inner wrapper (we animate this with JS) */
+/* inner wrapper */
 .lockscreen-inner {
   width: 100%;
   display: flex;
@@ -110,7 +109,7 @@ html, body {
   transform: translate3d(0,0,0) scale(1);
 }
 
-/* prompt / dots */
+/* prompt/dots */
 .prompt {
   position: relative;
   z-index: 3;
@@ -122,32 +121,11 @@ html, body {
   margin-bottom: 18px;
   color: white;
 }
+.dots { display:flex; gap:14px; margin-bottom:28px; pointer-events:none; z-index:3; }
+.dot { width:10px; height:10px; border-radius:50%; border:1.25px solid #fff; background:transparent; transition: background .12s ease, transform .12s ease, border-color .12s ease; box-shadow: 0 2px 6px rgba(0,0,0,0.45) inset; }
+.dot.filled { background:#fff; border-color:#fff; transform:scale(1.06); box-shadow:none; }
 
-.dots {
-  display: flex;
-  gap: 14px;
-  margin-bottom: 28px;
-  pointer-events: none;
-  z-index: 3;
-  will-change: transform;
-}
-.dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  border: 1.25px solid #fff;
-  background: transparent;
-  transition: background .12s ease, transform .12s ease, border-color .12s ease;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.45) inset;
-}
-.dot.filled {
-  background: #fff;
-  border-color: #fff;
-  transform: scale(1.06);
-  box-shadow: none;
-}
-
-/* keypad layout */
+/* keypad */
 .keypad {
   width: 100%;
   max-width: 420px;
@@ -159,7 +137,6 @@ html, body {
   margin-top: 50px;
   z-index: 3;
 }
-
 .key {
   width: var(--circle-size);
   height: var(--circle-size);
@@ -181,34 +158,11 @@ html, body {
   position: relative;
   z-index: 3;
 }
+.key.empty { background: transparent !important; box-shadow: none !important; cursor: default; pointer-events: none; visibility: hidden; }
+.key .num { display:block; font-weight:600; line-height:1; font-size:34px; color:white !important; text-shadow:0 2px 10px rgba(0,0,0,0.45); }
+.key .letters { display:block; font-size:12px; color:#fff; margin-top:6px; letter-spacing:0.9px; text-shadow:0 1px 2px rgba(0,0,0,0.45); font-weight:600; }
 
-.key.empty {
-  background: transparent !important;
-  box-shadow: none !important;
-  cursor: default;
-  pointer-events: none;
-  visibility: hidden;
-}
-
-.key .num {
-  display: block;
-  font-weight: 600;
-  line-height: 1;
-  font-size: 34px;
-  color: white !important;
-  text-shadow: 0 2px 10px rgba(0,0,0,0.45);
-}
-.key .letters {
-  display: block;
-  font-size: 12px;
-  color: #fff;
-  margin-top: 6px;
-  letter-spacing: 0.9px;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.45);
-  font-weight: 600;
-}
-
-/* bottom actions aligned to keypad width and centered like iPhone */
+/* bottom actions */
 .bottom-actions {
   position: absolute;
   left: 50%;
@@ -225,111 +179,39 @@ html, body {
   pointer-events: auto;
   background: transparent;
 }
+.action { background:none; border:none; color:white; font-size:18px; line-height:1; font-weight:400; opacity:0.98; cursor:pointer; -webkit-tap-highlight-color:transparent; padding:6px 8px; display:inline-block; text-align:center; }
 
-/* action buttons styling */
-.action {
-  background: none;
-  border: none;
-  color: white;
-  font-size: 18px;
-  line-height: 1;
-  font-weight: 400;
-  opacity: 0.98;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  padding: 6px 8px;
-  display: inline-block;
-  text-align: center;
-}
+/* unlock overlay & homescreen preview (kept from your file) */
+.unlock-overlay { position: fixed; inset:0; z-index:9999; display:none; align-items:center; justify-content:center; background:transparent; pointer-events:none; }
+.homescreen-img { position: fixed; top:0; left:0; width:100vw; height:100vh; object-fit:cover; transform-origin:center; transform:scale(0.98); opacity:0; filter: blur(6px) saturate(0.9); z-index:10000; pointer-events:none; -webkit-transform:translateZ(0); backface-visibility:hidden; }
+.unlock-overlay.show { display:flex; pointer-events:auto; }
 
-/* unlock overlay & homescreen preview (fixed) */
-.unlock-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  pointer-events: none;
-}
-.homescreen-img {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  object-fit: cover;
-  transform-origin: center;
-  transform: scale(0.98);
-  opacity: 0;
-  filter: blur(6px) saturate(0.9);
-  z-index: 10000;
-  pointer-events: none;
-  -webkit-transform: translateZ(0);
-  backface-visibility: hidden;
-}
-.unlock-overlay.show {
-  display: flex;
-  pointer-events: auto;
-}
+/* toast */
+#pass-toast { position: fixed; left:50%; bottom: calc(var(--safe-bottom) + 110px); transform: translateX(-50%); background:rgba(0,0,0,0.75); color:#fff; padding:8px 12px; border-radius:10px; font-weight:600; z-index:12002; pointer-events:none; font-family:-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif; box-shadow:0 6px 18px rgba(0,0,0,0.6); opacity:0; transition: opacity 160ms ease, transform 160ms ease; }
 
-/* simple toast used by app.js */
-#pass-toast {
-  position: fixed;
-  left: 50%;
-  bottom: calc(var(--safe-bottom) + 110px);
-  transform: translateX(-50%);
-  background: rgba(0,0,0,0.75);
-  color: #fff;
-  padding: 8px 12px;
-  border-radius: 10px;
-  font-weight: 600;
-  z-index: 12002;
-  pointer-events: none;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.6);
-  opacity: 0;
-  transition: opacity 160ms ease, transform 160ms ease;
-}
-
-/* Wrong attempt shake */
+/* pass shake */
 @keyframes passShake {
-  0%   { transform: translateX(0); }
-  6%   { transform: translateX(-20px); }
-  14%  { transform: translateX(16px); }
-  24%  { transform: translateX(-14px); }
-  36%  { transform: translateX(12px); }
-  52%  { transform: translateX(-8px); }
-  72%  { transform: translateX(6px); }
-  88%  { transform: translateX(-3px); }
-  100% { transform: translateX(0); }
+  0% { transform: translateX(0); } 6% { transform: translateX(-20px); } 14% { transform: translateX(16px); } 24% { transform: translateX(-14px); } 36% { transform: translateX(12px); } 52% { transform: translateX(-8px); } 72% { transform: translateX(6px); } 88% { transform: translateX(-3px); } 100% { transform: translateX(0); }
 }
-.dots.wrong {
-  animation: passShake 700ms cubic-bezier(.36,.07,.19,.97);
-  transform-origin: center;
-  will-change: transform;
-}
+.dots.wrong { animation: passShake 700ms cubic-bezier(.36,.07,.19,.97); transform-origin:center; will-change:transform; }
 
-/* reduced motion fallback */
+/* minor accessibility */
 @media (prefers-reduced-motion: reduce) {
   .lockscreen-inner { transition: none !important; transform: none !important; }
   .homescreen-img { transition: none !important; transform: none !important; filter: none !important; opacity: 1 !important; }
 }
-
-/* Slight nudge: move Emergency a touch further left */
 #emergency { margin-left: -6px; }
-@media (max-width: 420px) { #emergency { margin-left: -8px; } }
+@media (max-width: 420px) { #emergency { margin-left:-8px; } }
 
 /* =========================
-   Dynamic Island (tuned to your screenshot)
+   Dynamic Island (primary)
    ========================= */
 
-/* Pill base & positioning */
-.dynamic-island{
+/* pill */
+.dynamic-island {
   position: absolute;
   left: 50%;
-  top: calc(env(safe-area-inset-top, 20px) + var(--island-top-offset)); /* preserved -49px offset */
+  top: calc(env(safe-area-inset-top, 20px) + var(--island-top-offset));
   transform: translateX(calc(-50% - 10px)) scaleX(1);
   transform-origin: center;
   width: var(--island-w);
@@ -338,13 +220,11 @@ html, body {
   pointer-events: none;
   z-index: 12001;
 
-  /* glossy pill background mimicking iOS */
   background:
     linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.02) 6%, rgba(0,0,0,0.92) 24%),
     radial-gradient(80% 120% at 50% -40%, rgba(255,255,255,0.06), rgba(0,0,0,0) 45%),
     #000;
 
-  /* strong outer shadow + thin inner stroke */
   box-shadow:
     0 16px 36px rgba(0,0,0,0.55),
     0 0 0 1px rgba(255,255,255,0.03) inset,
@@ -353,131 +233,18 @@ html, body {
   backdrop-filter: blur(8px) saturate(0.9);
   -webkit-backdrop-filter: blur(8px) saturate(0.9);
 
-  /* transitions for the shrink/fade behavior */
+  /* shrink transition when removing the pill */
   transition: transform 520ms cubic-bezier(.22,.9,.29,.99), opacity 420ms ease;
   will-change: transform, opacity;
 }
 
-/* Shrink state: horizontally collapse and fade out.
-   We scale X near zero so the visual shrinks horizontally from center.
-*/
+/* shrink/vanish */
 .dynamic-island.shrinking {
   transform: translateX(calc(-50% - 10px)) scaleX(0.02);
   opacity: 0;
 }
 
-/* ---------- NEW: inline-SVG lock + shackle styles ----------
-
-   Approach:
-   - JS will inject an inline SVG inside .dynamic-island with
-     two named groups: .lock-body (stationary) and .lock-shackle (rotating).
-   - The shackle rotates around a left-side pivot so it appears to open
-     **toward the right** while the square body remains fixed.
-   - When JS adds `.icon-opened` to .dynamic-island, the shackle animation runs.
-   - When JS adds `.unlocked` the body visually swaps to the unlocked body
-     (can be handled by toggling a css class).
-*/
-.dynamic-island .island-lock {
-  position: absolute;
-  left: 12px; /* same offset as your previous lock position */
-  top: 50%;
-  width: calc(var(--island-icon-size) * 1.6); /* body slightly larger than icon-size for visual match */
-  height: calc(var(--island-icon-size) * 1.6);
-  transform: translateY(-50%);
-  display: block;
-  pointer-events: none;
-  z-index: 12002;
-  /* subtle smoothing */
-  -webkit-transform-origin: left center;
-  transform-origin: left center;
-  will-change: transform, opacity;
-}
-
-/* SVG sizing inside container */
-.dynamic-island .island-lock svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-/* By default the shackle is positioned (unrotated) above the body */
-.dynamic-island .island-lock .lock-shackle {
-  transform-origin: 24% 36%; /* tuned pivot inside the SVG (trialed to match screenshot) */
-  transform-box: fill-box;
-  transition: transform 360ms cubic-bezier(.22,.9,.29,.99);
-  will-change: transform;
-  /* slightly heavier fill to match screenshot white */
-  fill: #ffffff;
-  stroke: none;
-}
-
-/* lock body stays put and is a filled rounded-sq to match screenshot look */
-.dynamic-island .island-lock .lock-body {
-  fill: #ffffff;
-  transform-origin: center;
-  transition: opacity 180ms linear;
-}
-
-/* subtle shadow for body to sit on the pill */
-.dynamic-island .island-lock .lock-body-shadow {
-  fill: rgba(0,0,0,0.18);
-  opacity: 0.12;
-  transition: opacity 180ms linear;
-}
-
-/* When the dynamic island gets the 'icon-opened' class we run a
-   180° rotation-like opening of the shackle toward the right.
-
-   We use two-phase animation:
-    - quick rotate to ~200deg to mimic "swinging" pass the vertical,
-    - settle back to ~160deg (slightly less) so it looks natural.
-
-   The body does not move.
-*/
-.dynamic-island.icon-opened .island-lock .lock-shackle {
-  animation: shackleOpen 780ms cubic-bezier(.22,.9,.29,.99) forwards;
-}
-
-/* After fully unlocked we want the locked body to visually reflect unlocked state.
-   `.dynamic-island.unlocked` toggles a slightly different body path opacity so it
-   matches your screenshot (open body). If your JS also swaps the inner SVG path,
-   this will still gracefully handle it.
-*/
-.dynamic-island.unlocked .island-lock .lock-body {
-  opacity: 0.98;
-}
-.dynamic-island.unlocked .island-lock .lock-shackle {
-  fill: #ffffff;
-}
-
-/* Keyframes - big rotation to the right with overshoot then settle */
-@keyframes shackleOpen {
-  0% {
-    transform: rotate(0deg) translateX(0) translateY(0) scale(1);
-  }
-  38% {
-    /* swing fast past vertical (overshoot) */
-    transform: rotate(200deg) translateX(10px) translateY(-2px) scale(1.03);
-  }
-  72% {
-    /* come back a bit to rest in open position toward the right */
-    transform: rotate(165deg) translateX(6px) translateY(-1px) scale(1.01);
-  }
-  100% {
-    transform: rotate(160deg) translateX(4px) translateY(-0.5px) scale(1.0);
-  }
-}
-
-/* Small extra visual tweak: while opening, add a tiny 'pop' scale to body to sell the motion */
-.dynamic-island.icon-opened .island-lock .lock-body {
-  transform: scale(1.015);
-  transition: transform 420ms cubic-bezier(.22,.9,.29,.99);
-}
-.dynamic-island.icon-opened .island-lock .lock-body-shadow {
-  opacity: 0.18;
-}
-
-/* Right-side faint face icon (kept as an image background — unchanged) */
+/* face mark on right (unchanged) */
 .dynamic-island::after {
   content: "";
   position: absolute;
@@ -494,7 +261,7 @@ html, body {
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-opacity='0.18' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='9' cy='11' r='1.2' fill='%23ffffff' fill-opacity='0.18' stroke='none'/><circle cx='15' cy='11' r='1.2' fill='%23ffffff' fill-opacity='0.18' stroke='none'/><path d='M9 15c1.2 1 4.8 1 6 0' stroke='%23ffffff' stroke-opacity='0.18' fill='none'/></svg>");
 }
 
-/* small inner gloss bar to mimic the subtle oval highlight */
+/* small gloss inside pill */
 .dynamic-island .gloss {
   position: absolute;
   left: 9%;
@@ -509,62 +276,112 @@ html, body {
   mix-blend-mode: screen;
 }
 
-/* slightly smaller lock / face on narrow screens */
-@media (max-width: 420px){
-  :root{ --island-w: 300px; --island-h: 40px; --island-radius: 26px; }
-  /* reduce the icon size a touch on very narrow screens */
-  :root{ --island-icon-size: 20px; }
-  .dynamic-island::after{ width: var(--island-icon-size); height: var(--island-icon-size); right: 14px; background-size: var(--island-icon-size) var(--island-icon-size); }
-  .dynamic-island .island-lock { left: 12px; width: calc(var(--island-icon-size) * 1.5); height: calc(var(--island-icon-size) * 1.5); }
+/* ================
+   Inline-SVG lock container (expects an inline SVG in HTML)
+   ================ */
+.dynamic-island .island-lock {
+  position: absolute;
+  left: 12px; /* pixel position matches screenshot */
+  top: 50%;
+  width: calc(var(--island-icon-size) * 1.6);
+  height: calc(var(--island-icon-size) * 1.6);
+  transform: translateY(-50%);
+  display: block;
+  pointer-events: none;
+  z-index: 12002;
+  will-change: transform, opacity;
 }
 
-/* accessibility tweak */
-@media (prefers-contrast: more){
-  .dynamic-island{ box-shadow: 0 18px 42px rgba(0,0,0,0.7); }
+/* ensure SVG scales nicely */
+.dynamic-island .island-lock svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
-/* helper class to optionally pulse the FaceID icon (call with JS if you want) */
-.dynamic-island.pulse::after{
-  animation: facePulse 1400ms ease-in-out infinite;
+/* lock body (square) - pure white */
+.dynamic-island .island-lock .lock-body {
+  fill: #ffffff;
+  transition: transform 420ms cubic-bezier(.22,.9,.29,.99), opacity 140ms linear;
+  transform-origin: center;
+  will-change: transform, opacity;
+  /* small shadow look (subtle) */
+  filter: drop-shadow(0 1px 0 rgba(0,0,0,0.25));
 }
-@keyframes facePulse{
-  0%   { transform: translateY(-50%) scale(0.98); opacity: 0.95; }
-  50%  { transform: translateY(-50%) scale(1.06); opacity: 1; }
-  100% { transform: translateY(-50%) scale(0.98); opacity: 0.95; }
+
+/* optional subtle shadow shape behind the body (if present in SVG) */
+.dynamic-island .island-lock .lock-body-shadow {
+  fill: rgba(0,0,0,0.18);
+  opacity: 0.12;
+  transition: opacity 180ms linear;
 }
 
-/* End Dynamic Island */
+/* shackle. pivot point tuned to match photo. We animate the shackle group inside SVG. */
+.dynamic-island .island-lock .lock-shackle {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform-box: fill-box;
+  transform-origin: 22% 34%; /* pivot point inside the SVG (tuned) */
+  transition: transform 420ms cubic-bezier(.22,.9,.29,.99);
+  will-change: transform;
+}
 
-/* ***************************************************************
-   FINAL OVERRIDE — force narrow pill on small viewports and
-   re-center icons. Put at the very end so it wins over earlier rules
-   (this avoids caching/media-rule conflicts).
-   *************************************************************** */
+/* add a stronger drop-shadow while moving to match screenshot sheen */
+.dynamic-island.icon-opened .island-lock .lock-shackle {
+  animation: shackleOpen 780ms cubic-bezier(.22,.9,.29,.99) forwards;
+  filter: drop-shadow(0 3px 1px rgba(0,0,0,0.45));
+}
 
+/* tiny pop of the body during opening to sell the motion (body stays put) */
+.dynamic-island.icon-opened .island-lock .lock-body {
+  transform: scale(1.015);
+}
+.dynamic-island.icon-opened .island-lock .lock-body-shadow {
+  opacity: 0.18;
+}
+
+/* final "unlocked" look: keep shackle and body white and slightly settled */
+.dynamic-island.unlocked .island-lock .lock-shackle {
+  stroke: #ffffff;
+}
+.dynamic-island.unlocked .island-lock .lock-body {
+  opacity: 0.98;
+}
+
+/* keyframes: overshoot swing then settle slightly */
+@keyframes shackleOpen {
+  0% {
+    transform: rotate(0deg) translateX(0) translateY(0) scale(1);
+  }
+  38% {
+    transform: rotate(204deg) translateX(10px) translateY(-2px) scale(1.03);
+  }
+  72% {
+    transform: rotate(166deg) translateX(6px) translateY(-1px) scale(1.01);
+  }
+  100% {
+    transform: rotate(160deg) translateX(4px) translateY(-0.5px) scale(1.0);
+  }
+}
+
+/* responsive narrow pill fixes */
 @media (max-width: 420px) {
-  .dynamic-island {
-    width: 170px !important;
-    max-width: 170px !important;
-    height: var(--island-h) !important;       /* keep your chosen height */
-    border-radius: var(--island-radius) !important;
-  }
-
-  /* keep icons visually centered on the shortened pill */
-  .dynamic-island::before,
-  .dynamic-island::after {
-    left: 12px !important;
-    right: 12px !important;
-    width: var(--island-icon-size) !important;
-    height: var(--island-icon-size) !important;
-    background-size: var(--island-icon-size) var(--island-icon-size) !important;
-  }
-
-  /* tighten inner gloss so it doesn't overflow on narrower width */
-  .dynamic-island .gloss {
-    left: 12% !important;
-    right: 12% !important;
-    top: 8% !important;
-    height: 34% !important;
-    filter: blur(4px) !important;
-  }
+  :root { --island-w: 170px; --island-h: 40px; --island-radius: 26px; --island-icon-size: 20px; }
+  .dynamic-island { width: var(--island-w) !important; height: var(--island-h) !important; border-radius: var(--island-radius) !important; }
+  .dynamic-island::after { right: 12px !important; width: var(--island-icon-size); height: var(--island-icon-size); background-size: var(--island-icon-size) var(--island-icon-size); }
+  .dynamic-island .island-lock { left: 12px !important; width: calc(var(--island-icon-size) * 1.5); height: calc(var(--island-icon-size) * 1.5); }
 }
+
+/* accessibility contrast */
+@media (prefers-contrast: more) {
+  .dynamic-island { box-shadow: 0 18px 42px rgba(0,0,0,0.7); }
+}
+
+/* pulse helper for face icon if needed */
+.dynamic-island.pulse::after { animation: facePulse 1400ms ease-in-out infinite; }
+@keyframes facePulse { 0% { transform: translateY(-50%) scale(0.98); opacity:0.95 } 50% { transform: translateY(-50%) scale(1.06); opacity:1 } 100% { transform: translateY(-50%) scale(0.98); opacity:0.95 } }
+
+/* final note: keep this section last for deterministic media-rule wins */
