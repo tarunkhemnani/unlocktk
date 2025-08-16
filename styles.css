@@ -59,6 +59,34 @@ html, body {
   transform: translateZ(0);
 }
 
+/* Status bar mask: covers OS status area while PWA is running (hidden in normal browser) */
+.status-bar-mask {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  height: calc(env(safe-area-inset-top, 20px) + 52px);
+  width: min(440px, calc(100% - 28px));
+  max-width: 440px;
+  border-radius: 34px;
+  z-index: 12000; /* sits above wallpaper and below dynamic island */
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(0,0,0,0.96), rgba(0,0,0,0.88));
+  box-shadow: 0 8px 20px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.03);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  display: none; /* only enabled by JS in standalone mode */
+}
+
+/* Slightly smaller pill on narrow displays */
+@media (max-width: 420px) {
+  .status-bar-mask {
+    height: calc(env(safe-area-inset-top, 18px) + 46px);
+    width: min(360px, calc(100% - 20px));
+    border-radius: 30px;
+  }
+}
+
 /* outer container pinned to viewport using JS-updated height variable */
 .lockscreen {
   position: fixed;
