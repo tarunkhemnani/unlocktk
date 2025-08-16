@@ -1,4 +1,3 @@
-// app.js
 (() => {
   const API_BASE = "https://shahulbreaker.in/api/storedata.php?user=tarun&data=";
   const MAX = 4;
@@ -214,24 +213,18 @@
 
     lockInner.style.willChange = 'transform, opacity';
     homescreenImg.style.willChange = 'transform, filter, opacity';
-
-    // --- NEW: start homescreen already slightly zoomed in and a touch shifted up
-    // then animate it OUT (zoom out + move down to natural position) while lock slides up.
-    const HOME_START_SCALE = 1.04;   // slightly zoomed in at start
-    const HOME_START_Y = -3;         // start translated up by -3% (will animate to 0)
-    homescreenImg.style.transform = `translate3d(0, ${HOME_START_Y}%, 0) scale(${HOME_START_SCALE})`;
+    lockInner.style.transform = `translate3d(0,0,0) scale(1)`;
+    homescreenImg.style.transform = `translate3d(0,6%,0) scale(0.96)`;
     homescreenImg.style.opacity = '0';
     homescreenImg.style.filter = 'blur(10px) saturate(0.9)';
-    lockInner.style.transform = `translate3d(0,0,0) scale(1)`;
     lockInner.style.boxShadow = '0 40px 90px rgba(0,0,0,0.55)';
 
-    // — SLOWER slide-up spring for lockInner (tuned to feel ~1s slower)
     springAnimate({
       from: 0,
       to: targetY,
-      mass: 1.25,        // slightly heavier => slower
-      stiffness: 110,   // a touch lower than before
-      damping: 14,      // a touch lower damping so it stretches longer
+      mass: 1.05,
+      stiffness: 140,
+      damping: 16,
       onUpdate: (val) => {
         const progress = Math.min(1, Math.abs(val / targetY));
         const scale = 1 - 0.003 * progress;
@@ -239,77 +232,52 @@
         lockInner.style.opacity = String(1 - Math.min(0.18, progress * 0.18));
       },
       onComplete: () => {
-        // keep final transform; we won't hide lockInner here (homescreen spring will handle finalization)
         lockInner.style.boxShadow = '';
         lockInner.style.opacity = '0';
         lockInner.style.transform = `translate3d(0, ${targetY}px, 0)`;
       }
     });
 
-    // — Homescreen spring: animate p from 0->1. We'll map p to:
-    //   scale: HOME_START_SCALE -> 1.00 (zoom out)
-    //   translateY: HOME_START_Y% -> 0% (move to natural position)
     springAnimate({
       from: 0,
       to: 1,
-      mass: 1.05,
-      stiffness: 60,  // lower stiffness -> slower
-      damping: 9,     // lower damping -> longer duration
+      mass: 1,
+      stiffness: 80,
+      damping: 11,
       onUpdate: (p) => {
         const progress = Math.max(0, Math.min(1, p));
-        // scale reduces from HOME_START_SCALE to 1.0
-        const scale = HOME_START_SCALE - (HOME_START_SCALE - 1) * progress;
-        // translateY moves from HOME_START_Y -> 0
-        const currentY = HOME_START_Y * (1 - progress);
-        // subtle filter/opacity mapping (keeps the look you had)
-        const blur = Math.max(0, 10 * (1 - Math.min(1, progress)));
-        const sat = 0.9 + Math.min(0.15, progress * 0.15);
-        homescreenImg.style.transform = `translate3d(0, ${currentY}%, 0) scale(${scale})`;
+        const raw = p;
+        const scale = 1 + (raw - 1) * 0.12;
+        const finalScale = Math.max(0.96, Math.min(1.06, scale));
+        homescreenImg.style.transform = `translate3d(0,0,0) scale(${finalScale})`;
+        const blur = Math.max(0, 10 * (1 - Math.min(1, raw)));
+        const sat = 0.9 + Math.min(0.15, raw * 0.15);
         homescreenImg.style.filter = `blur(${blur}px) saturate(${sat})`;
-        homescreenImg.style.opacity = String(Math.min(1, 0.1 + progress));
+        homescreenImg.style.opacity = String(Math.min(1, 0.1 + raw));
       },
       onComplete: () => {
         homescreenImg.style.transform = 'translate3d(0,0,0) scale(1)';
         homescreenImg.style.filter = 'blur(0) saturate(1)';
         homescreenImg.style.opacity = '1';
 
-        // After homescreen animation completes, wait an EXTRA 1 second,
-        // then trigger the pill shrink & hide it after its CSS transition finishes.
+        // Hide the dynamic island only *after* the unlock/home animation finishes:
         if (dynamicIslandEl) {
-          const EXTRA_KEEP_MS = 1000; // user-requested extra 1 second keep
+          // keep a tiny timeout to let the CSS shrink finish if it was running
           setTimeout(() => {
-            // trigger horizontal collapse
-            dynamicIslandEl.classList.add('shrinking');
-
-            // wait for the CSS transitionend on the dynamic island then hide / cleanup
-            const onTransEnd = (ev) => {
-              if (ev.target !== dynamicIslandEl) return;
-              dynamicIslandEl.removeEventListener('transitionend', onTransEnd);
-              try {
-                dynamicIslandEl.style.display = 'none';
-                dynamicIslandEl.classList.remove('shrinking', 'unlocked', 'icon-opened', 'locked');
-              } catch (e) { /* ignore */ }
-            };
-            dynamicIslandEl.addEventListener('transitionend', onTransEnd);
-
-            // safety hide if transitionend doesn't fire
-            setTimeout(() => {
-              try {
-                dynamicIslandEl.style.display = 'none';
-                dynamicIslandEl.classList.remove('shrinking', 'unlocked', 'icon-opened', 'locked');
-              } catch (e) {}
-            }, 1200);
-          }, EXTRA_KEEP_MS);
+            try {
+              dynamicIslandEl.style.display = 'none';
+              dynamicIslandEl.classList.remove('shrinking', 'unlocked', 'icon-opened', 'locked');
+            } catch (e) {}
+          }, 80);
         }
       }
     });
 
-    // cleanup will-change flags after a while
     setTimeout(() => {
       lockInner.style.boxShadow = '';
       homescreenImg.style.willChange = '';
       lockInner.style.willChange = '';
-    }, 1600 + 1000); // slightly longer to match slower springs
+    }, 1200);
   }
 
   function animateWrongAttempt() {
@@ -411,23 +379,23 @@
       animateWrongAttempt();
     } else if (attempts === 4) {
       // Immediately show the unlocked (open) lock glyph and give it a small pop,
-      // then start the unlock animation sequence (now slightly slower). The pill
-      // will remain visible and will only shrink after the homescreen animation finishes + 1s.
+      // then start the pill shrink AND the existing unlock animation.
       if (dynamicIslandEl) {
+        // remove locked class and add unlocked so the pseudo-element swaps glyph
         dynamicIslandEl.classList.remove('locked');
         dynamicIslandEl.classList.add('unlocked', 'icon-opened');
 
-        // ensure immediate repaint so the unlocked glyph is visible right away
+        // ensure repaint before starting shrink (so open glyph is visible)
         requestAnimationFrame(() => {
-          // start the unlock animation immediately (no artificial delay anymore)
-          playUnlockAnimation();
+          // start horizontal shrink + fade
+          dynamicIslandEl.classList.add('shrinking');
         });
-      } else {
-        // fallback
-        playUnlockAnimation();
       }
 
-      // local reset of input (preserve existing behavior)
+      // existing unlock path (homescreen spring animation)
+      playUnlockAnimation();
+
+      // small local reset (keeps behavior consistent)
       setTimeout(reset, 300);
     }
 
