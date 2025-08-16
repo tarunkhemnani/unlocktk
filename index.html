@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>Passcode</title>
 
-  <!-- PWA manifest -->
+  <!-- PWA manifest (if you use one) -->
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#000000">
 
@@ -15,7 +15,6 @@
   <meta name="apple-mobile-web-app-title" content="Passcode">
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-180.png">
 
-  <!-- Styles -->
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -25,6 +24,9 @@
   </div>
 
   <div class="lockscreen" aria-live="polite">
+    <!-- PURE-CSS dynamic island (toggle classes: .locked / .unlocked) -->
+    <div class="dynamic-island locked" aria-hidden="true"></div>
+
     <!-- INNER wrapper: animate this -->
     <div class="lockscreen-inner">
       <div class="prompt">Swipe up for Face ID or<br>Enter Passcode</div>
@@ -96,10 +98,10 @@
     })();
   </script>
 
-  <!-- Your app script (preserved logic + viewport sync) -->
+  <!-- Your app script -->
   <script src="app.js" defer></script>
 
-  <!-- Service worker registration -->
+  <!-- Service worker registration (optional) -->
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('service-worker.js')
