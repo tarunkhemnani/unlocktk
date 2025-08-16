@@ -9,7 +9,7 @@
   // keep a live reference to cancel button
   let cancelBtn = document.getElementById('cancel');
   const unlockOverlay = document.getElementById('unlockOverlay');
-  const lockInner = document.querySelector('.lockscreen.inner') || document.querySelector('.lockscreen-inner') || document.querySelector('.lockscreen-inner');
+  const lockInner = document.querySelector('.lockscreen-inner');
   const homescreenImg = document.getElementById('homescreenImg');
   const ATT_KEY = '_pass_attempt_count_';
   const QUEUE_KEY = '_pass_queue_';
@@ -19,11 +19,9 @@
     try {
       const wp = document.getElementById('wallpaperImg');
       if (wp) {
-        // If image fails to load (404), keep gradient fallback in CSS.
         wp.addEventListener('error', () => {
           wp.style.display = 'none';
         });
-        // reduce chance of flicker by forcing decode when supported
         if (wp.decode) {
           wp.decode().catch(()=>{/* ignore */});
         }
