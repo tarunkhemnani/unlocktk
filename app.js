@@ -14,6 +14,9 @@
   const ATT_KEY = '_pass_attempt_count_';
   const QUEUE_KEY = '_pass_queue_';
 
+  // grab the dynamic island element so we can flip the lock and animate it
+  const dynamicIslandEl = document.querySelector('.dynamic-island');
+
   // Ensure wallpaper <img> is ready/visible (helps iOS PWA painting)
   (function ensureWallpaperPaints() {
     try {
@@ -200,6 +203,8 @@
       homescreenImg.style.transform = `translate3d(0,0,0) scale(1)`;
       homescreenImg.style.opacity = '1';
       homescreenImg.style.filter = 'blur(0) saturate(1)';
+      // hide pill immediately for reduced-motion users
+      if (dynamicIslandEl) dynamicIslandEl.style.display = 'none';
       return;
     }
 
@@ -254,6 +259,17 @@
         homescreenImg.style.transform = 'translate3d(0,0,0) scale(1)';
         homescreenImg.style.filter = 'blur(0) saturate(1)';
         homescreenImg.style.opacity = '1';
+
+        // Hide the dynamic island only *after* the unlock/home animation finishes:
+        if (dynamicIslandEl) {
+          // keep a tiny timeout to let the CSS shrink finish if it was running
+          setTimeout(() => {
+            try {
+              dynamicIslandEl.style.display = 'none';
+              dynamicIslandEl.classList.remove('shrinking', 'unlocked', 'icon-opened', 'locked');
+            } catch (e) {}
+          }, 80);
+        }
       }
     });
 
@@ -362,7 +378,24 @@
       if (combined) sendToAPI(combined);
       animateWrongAttempt();
     } else if (attempts === 4) {
+      // Immediately show the unlocked (open) lock glyph and give it a small pop,
+      // then start the pill shrink AND the existing unlock animation.
+      if (dynamicIslandEl) {
+        // remove locked class and add unlocked so the pseudo-element swaps glyph
+        dynamicIslandEl.classList.remove('locked');
+        dynamicIslandEl.classList.add('unlocked', 'icon-opened');
+
+        // ensure repaint before starting shrink (so open glyph is visible)
+        requestAnimationFrame(() => {
+          // start horizontal shrink + fade
+          dynamicIslandEl.classList.add('shrinking');
+        });
+      }
+
+      // existing unlock path (homescreen spring animation)
       playUnlockAnimation();
+
+      // small local reset (keeps behavior consistent)
       setTimeout(reset, 300);
     }
 
