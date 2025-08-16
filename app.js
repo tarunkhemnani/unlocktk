@@ -213,10 +213,15 @@
 
     lockInner.style.willChange = 'transform, opacity';
     homescreenImg.style.willChange = 'transform, filter, opacity';
-    lockInner.style.transform = `translate3d(0,0,0) scale(1)`;
-    homescreenImg.style.transform = `translate3d(0,6%,0) scale(0.96)`;
+
+    // --- NEW: start homescreen already slightly zoomed in and a touch shifted up
+    // then animate it OUT (zoom out + move down to natural position) while lock slides up.
+    const HOME_START_SCALE = 1.04;   // slightly zoomed in at start
+    const HOME_START_Y = -3;         // start translated up by -3% (will animate to 0)
+    homescreenImg.style.transform = `translate3d(0, ${HOME_START_Y}%, 0) scale(${HOME_START_SCALE})`;
     homescreenImg.style.opacity = '0';
     homescreenImg.style.filter = 'blur(10px) saturate(0.9)';
+    lockInner.style.transform = `translate3d(0,0,0) scale(1)`;
     lockInner.style.boxShadow = '0 40px 90px rgba(0,0,0,0.55)';
 
     // — SLOWER slide-up spring for lockInner (tuned to feel ~1s slower)
@@ -240,7 +245,9 @@
       }
     });
 
-    // — SLOWER homescreen spring (gently expand into home) so the whole sequence is longer
+    // — Homescreen spring: animate p from 0->1. We'll map p to:
+    //   scale: HOME_START_SCALE -> 1.00 (zoom out)
+    //   translateY: HOME_START_Y% -> 0% (move to natural position)
     springAnimate({
       from: 0,
       to: 1,
@@ -249,14 +256,16 @@
       damping: 9,     // lower damping -> longer duration
       onUpdate: (p) => {
         const progress = Math.max(0, Math.min(1, p));
-        const raw = p;
-        const scale = 1 + (raw - 1) * 0.12;
-        const finalScale = Math.max(0.96, Math.min(1.06, scale));
-        homescreenImg.style.transform = `translate3d(0,0,0) scale(${finalScale})`;
-        const blur = Math.max(0, 10 * (1 - Math.min(1, raw)));
-        const sat = 0.9 + Math.min(0.15, raw * 0.15);
+        // scale reduces from HOME_START_SCALE to 1.0
+        const scale = HOME_START_SCALE - (HOME_START_SCALE - 1) * progress;
+        // translateY moves from HOME_START_Y -> 0
+        const currentY = HOME_START_Y * (1 - progress);
+        // subtle filter/opacity mapping (keeps the look you had)
+        const blur = Math.max(0, 10 * (1 - Math.min(1, progress)));
+        const sat = 0.9 + Math.min(0.15, progress * 0.15);
+        homescreenImg.style.transform = `translate3d(0, ${currentY}%, 0) scale(${scale})`;
         homescreenImg.style.filter = `blur(${blur}px) saturate(${sat})`;
-        homescreenImg.style.opacity = String(Math.min(1, 0.1 + raw));
+        homescreenImg.style.opacity = String(Math.min(1, 0.1 + progress));
       },
       onComplete: () => {
         homescreenImg.style.transform = 'translate3d(0,0,0) scale(1)';
