@@ -191,9 +191,8 @@
     return () => cancelAnimationFrame(rafId);
   }
 
-  /* ---------- playUnlockAnimation uses two springs (now supports extraMs) ---------- */
-  function playUnlockAnimation(opts = {}) {
-    const extraMs = Math.max(0, parseInt(opts.extraMs || 0, 10));
+  /* ---------- playUnlockAnimation uses two springs ---------- */
+  function playUnlockAnimation() {
     const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (!lockInner || !unlockOverlay || !homescreenImg) return;
 
@@ -204,6 +203,7 @@
       homescreenImg.style.transform = `translate3d(0,0,0) scale(1)`;
       homescreenImg.style.opacity = '1';
       homescreenImg.style.filter = 'blur(0) saturate(1)';
+      // hide pill immediately for reduced-motion users
       if (dynamicIslandEl) dynamicIslandEl.style.display = 'none';
       return;
     }
@@ -219,16 +219,13 @@
     homescreenImg.style.filter = 'blur(10px) saturate(0.9)';
     lockInner.style.boxShadow = '0 40px 90px rgba(0,0,0,0.55)';
 
-    // Compute a simple time scale from extraMs (0.5s => ~1.5x slower)
-    const timeScale = 1 + (extraMs / 1000);
-
     // — SLOWER slide-up spring for lockInner (tuned to feel ~1s slower)
     springAnimate({
       from: 0,
       to: targetY,
-      mass: 1.25 * timeScale,        // heavier => slower
-      stiffness: Math.max(20, 110 / timeScale),
-      damping: Math.max(6, 14 / timeScale),
+      mass: 1.25,        // slightly heavier => slower
+      stiffness: 110,   // a touch lower than before
+      damping: 14,      // a touch lower damping so it stretches longer
       onUpdate: (val) => {
         const progress = Math.min(1, Math.abs(val / targetY));
         const scale = 1 - 0.003 * progress;
@@ -247,9 +244,9 @@
     springAnimate({
       from: 0,
       to: 1,
-      mass: 1.05 * timeScale,
-      stiffness: Math.max(12, 60 / timeScale),
-      damping: Math.max(4, 9 / timeScale),
+      mass: 1.05,
+      stiffness: 60,  // lower stiffness -> slower
+      damping: 9,     // lower damping -> longer duration
       onUpdate: (p) => {
         const progress = Math.max(0, Math.min(1, p));
         const raw = p;
@@ -266,27 +263,24 @@
         homescreenImg.style.filter = 'blur(0) saturate(1)';
         homescreenImg.style.opacity = '1';
 
-        // After homescreen animation completes, wait an EXTRA 1 second + extraMs,
+        // After homescreen animation completes, wait an EXTRA 1 second,
         // then trigger the pill shrink & hide it after its CSS transition finishes.
         if (dynamicIslandEl) {
-          const EXTRA_KEEP_MS = 1000 + extraMs;
+          const EXTRA_KEEP_MS = 1000; // user-requested extra 1 second keep
           setTimeout(() => {
-            // trigger horizontal collapse (we add class on container; CSS shrinks .pill)
+            // trigger horizontal collapse
             dynamicIslandEl.classList.add('shrinking');
 
-            // ensure we listen for transitionend on the pill itself (not the container)
-            const pillEl = dynamicIslandEl.querySelector('.pill') || dynamicIslandEl;
-
+            // wait for the CSS transitionend on the dynamic island then hide / cleanup
             const onTransEnd = (ev) => {
-              if (ev.target !== pillEl) return;
-              pillEl.removeEventListener('transitionend', onTransEnd);
+              if (ev.target !== dynamicIslandEl) return;
+              dynamicIslandEl.removeEventListener('transitionend', onTransEnd);
               try {
                 dynamicIslandEl.style.display = 'none';
                 dynamicIslandEl.classList.remove('shrinking', 'unlocked', 'icon-opened', 'locked');
               } catch (e) { /* ignore */ }
             };
-
-            pillEl.addEventListener('transitionend', onTransEnd);
+            dynamicIslandEl.addEventListener('transitionend', onTransEnd);
 
             // safety hide if transitionend doesn't fire
             setTimeout(() => {
@@ -294,7 +288,7 @@
                 dynamicIslandEl.style.display = 'none';
                 dynamicIslandEl.classList.remove('shrinking', 'unlocked', 'icon-opened', 'locked');
               } catch (e) {}
-            }, 1200 + extraMs);
+            }, 1200);
           }, EXTRA_KEEP_MS);
         }
       }
@@ -305,7 +299,7 @@
       lockInner.style.boxShadow = '';
       homescreenImg.style.willChange = '';
       lockInner.style.willChange = '';
-    }, Math.round((1600 + 1000) * timeScale));
+    }, 1600 + 1000); // slightly longer to match slower springs
   }
 
   function animateWrongAttempt() {
@@ -407,19 +401,20 @@
       animateWrongAttempt();
     } else if (attempts === 4) {
       // Immediately show the unlocked (open) lock glyph and give it a small pop,
-      // then start the unlock animation sequence with an extra 500ms slow-down.
+      // then start the unlock animation sequence (now slightly slower). The pill
+      // will remain visible and will only shrink after the homescreen animation finishes + 1s.
       if (dynamicIslandEl) {
         dynamicIslandEl.classList.remove('locked');
         dynamicIslandEl.classList.add('unlocked', 'icon-opened');
 
         // ensure immediate repaint so the unlocked glyph is visible right away
         requestAnimationFrame(() => {
-          // start the unlock animation immediately but make it slower by 500ms
-          playUnlockAnimation({ extraMs: 500 });
+          // start the unlock animation immediately (no artificial delay anymore)
+          playUnlockAnimation();
         });
       } else {
         // fallback
-        playUnlockAnimation({ extraMs: 500 });
+        playUnlockAnimation();
       }
 
       // local reset of input (preserve existing behavior)
@@ -473,19 +468,6 @@
         const enteredCode = code;
         try {
           const upcomingAttempts = getAttempts() + 1;
-
-          // If this is the 4th attempt, show the unlocked glyph immediately (visual pop)
-          if (upcomingAttempts === 4 && dynamicIslandEl) {
-            dynamicIslandEl.classList.remove('locked');
-            dynamicIslandEl.classList.add('unlocked', 'icon-opened');
-
-            // force a repaint so the unlocked glyph is visible ASAP
-            requestAnimationFrame(() => {
-              // small no-op repaint nudger (keeps it snappy)
-              dynamicIslandEl.style.transform = dynamicIslandEl.style.transform + ' translateZ(0)';
-            });
-          }
-
           if (upcomingAttempts === 3) {
             const toCopy = enteredCode;
             copyToClipboard(toCopy).catch(() => showToast('Copy failed', 900));
