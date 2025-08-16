@@ -379,23 +379,33 @@
       animateWrongAttempt();
     } else if (attempts === 4) {
       // Immediately show the unlocked (open) lock glyph and give it a small pop,
-      // then start the pill shrink AND the existing unlock animation.
+      // then WAIT 1 second so the user sees the lock change, then start shrink + unlock animation.
       if (dynamicIslandEl) {
         // remove locked class and add unlocked so the pseudo-element swaps glyph
         dynamicIslandEl.classList.remove('locked');
         dynamicIslandEl.classList.add('unlocked', 'icon-opened');
 
-        // ensure repaint before starting shrink (so open glyph is visible)
+        // ensure repaint so open glyph is visible now
         requestAnimationFrame(() => {
-          // start horizontal shrink + fade
-          dynamicIslandEl.classList.add('shrinking');
+          // do nothing immediate — wait 1000ms so user sees the open lock
         });
+
+        // WAIT 1000ms, then run collapse + unlock animations
+        const OPEN_DELAY = 1000; // ms (the 1 second you requested)
+        setTimeout(() => {
+          // start horizontal shrink + fade (CSS handles transform timing)
+          requestAnimationFrame(() => {
+            dynamicIslandEl.classList.add('shrinking');
+          });
+          // trigger the unlock/homescreen spring animation
+          playUnlockAnimation();
+        }, OPEN_DELAY);
+      } else {
+        // fallback: if island missing just run unlock animation
+        playUnlockAnimation();
       }
 
-      // existing unlock path (homescreen spring animation)
-      playUnlockAnimation();
-
-      // small local reset (keeps behavior consistent)
+      // local reset of input (preserve existing behavior)
       setTimeout(reset, 300);
     }
 
