@@ -422,3 +422,37 @@ html, body {
 
 /* End Dynamic Island */
 
+
+/* ***************************************************************
+   FINAL OVERRIDE — force narrow pill on small viewports and
+   re-center icons. Put at the very end so it wins over earlier rules
+   (this avoids caching/media-rule conflicts).
+   *************************************************************** */
+
+@media (max-width: 420px) {
+  .dynamic-island {
+    width: 150px !important;
+    max-width: 150px !important;
+    height: var(--island-h) !important;       /* keep your chosen height */
+    border-radius: var(--island-radius) !important;
+  }
+
+  /* keep icons visually centered on the shortened pill */
+  .dynamic-island::before,
+  .dynamic-island::after {
+    left: 12px !important;
+    right: 12px !important;
+    width: 18px !important;
+    height: 18px !important;
+    background-size: contain !important;
+  }
+
+  /* tighten inner gloss so it doesn't overflow on narrower width */
+  .dynamic-island .gloss {
+    left: 12% !important;
+    right: 12% !important;
+    top: 8% !important;
+    height: 34% !important;
+    filter: blur(4px) !important;
+  }
+}
