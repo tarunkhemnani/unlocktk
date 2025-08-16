@@ -5,39 +5,40 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>Passcode</title>
 
-  <!-- IMPORTANT: allow content to underlay status bar -->
+  <!-- PWA manifest (if you use one) -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#000000">
+
+  <!-- iOS PWA support -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Passcode">
-
-  <!-- PWA manifest (optional) -->
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#000000">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon-180.png">
 
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <!-- Wallpaper layer (keep this) -->
+  <!-- Wallpaper layer - rely on <img> for reliable iOS painting -->
   <div class="wallpaper-layer" aria-hidden="true">
     <img id="wallpaperImg" src="wallpaper.jpg" alt="Wallpaper" class="wallpaper-img" />
   </div>
 
-  <!-- TOP MASK: covers the real OS status icons visually.
-       Display controlled by JS: shown in standalone or when debug ?mask=1.
-       It is pointer-events: none so it doesn't block touches. -->
-  <div id="statusBarMask" class="status-bar-mask" aria-hidden="true"></div>
-
   <div class="lockscreen" aria-live="polite">
-    <!-- PURE-CSS dynamic island -->
-    <div class="dynamic-island locked" aria-hidden="true"></div>
+    <!-- PURE-CSS dynamic island (toggle classes: .locked / .unlocked) -->
+    <div class="dynamic-island locked" aria-hidden="true">
+      <span class="gloss" aria-hidden="true"></span>
+    </div>
 
+    <!-- INNER wrapper: animate this -->
     <div class="lockscreen-inner">
       <div class="prompt">Swipe up for Face ID or<br>Enter Passcode</div>
 
+      <!-- 4 dots (match MAX = 4) -->
       <div class="dots" id="dots" aria-hidden="true">
         <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
       </div>
 
+      <!-- keypad -->
       <div class="keypad" id="keypad" role="group" aria-label="Passcode keypad">
         <button class="key" data-num="1" type="button"><span class="num">1</span><span class="letters"></span></button>
         <button class="key" data-num="2" type="button"><span class="num">2</span><span class="letters">ABC</span></button>
@@ -51,23 +52,26 @@
         <button class="key" data-num="8" type="button"><span class="num">8</span><span class="letters">TUV</span></button>
         <button class="key" data-num="9" type="button"><span class="num">9</span><span class="letters">WXYZ</span></button>
 
+        <!-- spacer / 0 / spacer -->
         <div class="key empty" aria-hidden="true"></div>
         <button class="key" data-num="0" type="button"><span class="num">0</span><span class="letters"></span></button>
         <div class="key empty" aria-hidden="true"></div>
       </div>
     </div>
 
+    <!-- bottom actions — outside inner wrapper so they're anchored to bottom -->
     <div class="bottom-actions">
       <button class="action" id="emergency" type="button">Emergency</button>
       <button class="action" id="cancel" type="button">Cancel</button>
     </div>
   </div>
 
+  <!-- Unlock overlay -->
   <div id="unlockOverlay" class="unlock-overlay" aria-hidden="true">
     <img id="homescreenImg" src="homescreen.jpg" alt="Home screen" class="homescreen-img" />
   </div>
 
-  <!-- early hotspot so touches register -->
+  <!-- Create hotspot early so it can receive touches immediately -->
   <script>
     (function ensureHotspotEarly() {
       if (!document.getElementById('codesHotspot')) {
@@ -96,6 +100,16 @@
     })();
   </script>
 
+  <!-- Your app script -->
   <script src="app.js" defer></script>
+
+  <!-- Service worker registration (optional) -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('service-worker.js')
+        .then(() => console.log('Service Worker registered'))
+        .catch((err) => console.warn('SW registration failed', err));
+    }
+  </script>
 </body>
 </html>
