@@ -11,6 +11,9 @@
   --island-radius: 28px; /* radius preserved */
   /* NEGATIVE offset to move the pill up so it's flush with the real island */
   --island-top-offset: -49px;
+
+  /* Icon helper - change this value to scale both icons together */
+  --island-icon-size: 18px;
 }
 
 /* Root: prevent rubber-band and provide safe fallback background */
@@ -356,31 +359,34 @@ html, body {
   content: "";
   position: absolute;
   top: 50%;
-  width: 22px;   /* adjusted to fit with reduced width */
-  height: 22px;
+  width: var(--island-icon-size);
+  height: var(--island-icon-size);
   transform: translateY(-50%);
   opacity: 0.98;
+  /* drop-shadow tuned so the lock looks crisp against the pill */
   filter: drop-shadow(0 1px 0 rgba(0,0,0,0.45));
   background-repeat: no-repeat;
   background-position: center;
-  background-size: contain;
+  background-size: var(--island-icon-size) var(--island-icon-size);
 }
 
 /* move icons slightly inward — matches screenshot spacing */
-.dynamic-island::before{ left: 14px; }  /* left lock */
-.dynamic-island::after { right: 14px; } /* right face */
+.dynamic-island::before{ left: 12px; }  /* left lock */
+.dynamic-island::after { right: 12px; } /* right face */
 
-/* inline SVG icons (white glyphs) */
+/* inline SVG icons
+   - lock is a solid white filled glyph (keeps crisp filled look)
+   - face is a subtle faint stroke (low opacity) so it appears subdued on the right
+*/
 .dynamic-island{
-  --icon-face: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='9' cy='11' r='1.2' fill='%23ffffff' stroke='none'/><circle cx='15' cy='11' r='1.2' fill='%23ffffff' stroke='none'/><path d='M9 15c1.2 1 4.8 1 6 0' stroke='%23ffffff' fill='none'/></svg>");
+  --icon-face: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-opacity='0.18' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='9' cy='11' r='1.2' fill='%23ffffff' fill-opacity='0.18' stroke='none'/><circle cx='15' cy='11' r='1.2' fill='%23ffffff' fill-opacity='0.18' stroke='none'/><path d='M9 15c1.2 1 4.8 1 6 0' stroke='%23ffffff' stroke-opacity='0.18' fill='none'/></svg>");
 }
 .dynamic-island.locked{
-  --icon-lock: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff'><path d='M17 10h-1V8a4 4 0 0 0-8 0v2H7a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1zm-3 0H10V8a2 2 0 1 1 4 0v2z'/></svg>");
-}
-.dynamic-island.unlocked{
-  --icon-lock: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff'><path d='M17 10h-1V8a4 4 0 1 0-8 0h2a2 2 0 1 1 4 0v2H7a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1z'/></svg>");
+  /* explicit lock icon: filled white, slightly smaller inner path so it reads well at small sizes */
+  --icon-lock: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%23ffffff' d='M17 10h-1V8a4 4 0 0 0-8 0v2H7a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1zm-3 0H10V8a2 2 0 1 1 4 0v2z'/></svg>");
 }
 
+/* apply to the pseudo elements */
 .dynamic-island::before{ background-image: var(--icon-lock); }
 .dynamic-island::after { background-image: var(--icon-face); }
 
@@ -402,7 +408,9 @@ html, body {
 /* slightly smaller lock / face on narrow screens */
 @media (max-width: 420px){
   :root{ --island-w: 300px; --island-h: 40px; --island-radius: 26px; }
-  .dynamic-island::before, .dynamic-island::after{ width: 20px; height: 20px; left: 14px; right: 14px; }
+  /* reduce the icon size a touch on very narrow screens */
+  :root{ --island-icon-size: 16px; }
+  .dynamic-island::before, .dynamic-island::after{ width: var(--island-icon-size); height: var(--island-icon-size); left: 14px; right: 14px; background-size: var(--island-icon-size) var(--island-icon-size); }
 }
 
 /* accessibility tweak */
@@ -421,7 +429,6 @@ html, body {
 }
 
 /* End Dynamic Island */
-
 
 /* ***************************************************************
    FINAL OVERRIDE — force narrow pill on small viewports and
@@ -442,9 +449,9 @@ html, body {
   .dynamic-island::after {
     left: 12px !important;
     right: 12px !important;
-    width: 18px !important;
-    height: 18px !important;
-    background-size: contain !important;
+    width: var(--island-icon-size) !important;
+    height: var(--island-icon-size) !important;
+    background-size: var(--island-icon-size) var(--island-icon-size) !important;
   }
 
   /* tighten inner gloss so it doesn't overflow on narrower width */
@@ -456,10 +463,3 @@ html, body {
     filter: blur(4px) !important;
   }
 }
-
-
-
-
-
-
-
