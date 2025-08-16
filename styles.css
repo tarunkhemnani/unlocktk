@@ -371,7 +371,8 @@ html, body {
 }
 
 /* move icons slightly inward — matches screenshot spacing */
-.dynamic-island::before{ left: 12px; }  /* left lock */
+/* left lock nudged a little more to avoid touching the pill curve */
+.dynamic-island::before{ left: 14px; }  /* left lock */
 .dynamic-island::after { right: 12px; } /* right face */
 
 /* inline SVG icons
@@ -409,7 +410,7 @@ html, body {
 @media (max-width: 420px){
   :root{ --island-w: 300px; --island-h: 40px; --island-radius: 26px; }
   /* reduce the icon size a touch on very narrow screens */
-  :root{ --island-icon-size: 16px; }
+  :root{ --island-icon-size: 20px; }
   .dynamic-island::before, .dynamic-island::after{ width: var(--island-icon-size); height: var(--island-icon-size); left: 14px; right: 14px; background-size: var(--island-icon-size) var(--island-icon-size); }
 }
 
@@ -463,4 +464,3 @@ html, body {
     filter: blur(4px) !important;
   }
 }
-
