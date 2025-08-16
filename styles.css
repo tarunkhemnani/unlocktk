@@ -6,7 +6,7 @@
   --app-viewport-height: 100dvh; /* updated by JS at runtime */
 
   /* Dynamic island sizing (tuned to screenshot) */
-  --island-w: 350px;     /* <-- reduced width so pill doesn't stretch to the sides */
+  --island-w: 300px;     /* <-- reduced width so pill doesn't stretch to the sides */
   --island-h: 42px;      /* height preserved */
   --island-radius: 28px; /* radius preserved */
   /* NEGATIVE offset to move the pill up so it's flush with the real island */
@@ -431,8 +431,8 @@ html, body {
 
 @media (max-width: 420px) {
   .dynamic-island {
-    width: 150px !important;
-    max-width: 150px !important;
+    width: 300px !important;
+    max-width: 300px !important;
     height: var(--island-h) !important;       /* keep your chosen height */
     border-radius: var(--island-radius) !important;
   }
@@ -456,5 +456,6 @@ html, body {
     filter: blur(4px) !important;
   }
 }
+
 
 
