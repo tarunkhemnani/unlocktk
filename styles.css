@@ -6,7 +6,7 @@
   --app-viewport-height: 100dvh; /* updated by JS at runtime */
 
   /* Dynamic island sizing (tuned to screenshot) */
-  --island-w: 170px;     /* base width (your value) */
+  --island-w: 170px;     /* <-- reduced width so pill doesn't stretch to the sides */
   --island-h: 42px;      /* height preserved */
   --island-radius: 28px; /* radius preserved */
   /* NEGATIVE offset to move the pill up so it's flush with the real island */
@@ -325,17 +325,13 @@ html, body {
    Dynamic Island (tuned to your screenshot)
    ========================= */
 
-/* Pill base & positioning
-   NOTE: we intentionally add "+ 10px" and shift the translateX by half that
-   so the pill grows only on the left side (right edge remains unchanged).
-*/
+/* Pill base & positioning */
 .dynamic-island{
   position: absolute;
   left: 50%;
   top: calc(env(safe-area-inset-top, 20px) + var(--island-top-offset)); /* preserved -49px offset */
-  /* shift left by half the added amount to keep the right edge in place */
-  transform: translateX(calc(-50% - 5px));
-  width: calc(var(--island-w) + 10px); /* <-- +10px added to left side only (see transform) */
+  transform: translateX(calc(-50% - 10px)); /* ← moved the whole pill 10px to the left (only change) */
+  width: var(--island-w);
   height: var(--island-h);
   border-radius: var(--island-radius);
   pointer-events: none;
@@ -375,9 +371,9 @@ html, body {
 }
 
 /* move icons slightly inward — matches screenshot spacing */
-/* LEFT icon offset is increased by 10px so visual lock position remains the same on screen */
-.dynamic-island::before{ left: 24px; }  /* left lock (was 14px) */
-.dynamic-island::after { right: 12px; } /* right face (unchanged) */
+/* left lock nudged a little more to avoid touching the pill curve */
+.dynamic-island::before{ left: 14px; }  /* left lock */
+.dynamic-island::after { right: 12px; } /* right face */
 
 /* inline SVG icons
    - lock is a solid white filled glyph (keeps crisp filled look)
@@ -443,17 +439,16 @@ html, body {
 
 @media (max-width: 420px) {
   .dynamic-island {
-    width: calc(var(--island-w) + 10px) !important;
-    max-width: calc(var(--island-w) + 10px) !important;
+    width: 170px !important;
+    max-width: 170px !important;
     height: var(--island-h) !important;       /* keep your chosen height */
     border-radius: var(--island-radius) !important;
-    transform: translateX(calc(-50% - 5px)) !important;
   }
 
   /* keep icons visually centered on the shortened pill */
   .dynamic-island::before,
   .dynamic-island::after {
-    left: calc(12px + 10px) !important;   /* keep lock visually in same screen spot */
+    left: 12px !important;
     right: 12px !important;
     width: var(--island-icon-size) !important;
     height: var(--island-icon-size) !important;
@@ -469,4 +464,3 @@ html, body {
     filter: blur(4px) !important;
   }
 }
-
