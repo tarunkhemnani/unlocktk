@@ -125,7 +125,7 @@ html, body {
 .prompt-title {
   margin: 0;
   font-weight: 500;        /* <-- changed to lighter weight per request */
-  font-size: 24px;          /* <-- slightly smaller than before (was 26px) */
+  font-size: 20px;          /* <-- slightly smaller than before (was 26px) */
   line-height: 1.05;
   letter-spacing: 0.2px;
   color: #ffffff;
@@ -530,3 +530,4 @@ html, body {
     filter: blur(4px) !important;
   }
 }
+
