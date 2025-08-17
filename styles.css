@@ -125,7 +125,7 @@ html, body {
 .prompt-title {
   margin: 0;
   font-weight: 500;        /* <-- changed to lighter weight per request */
-  font-size: 20px;          /* <-- slightly smaller than before (was 28px) */
+  font-size: 24px;          /* <-- slightly smaller than before (was 26px) */
   line-height: 1.05;
   letter-spacing: 0.2px;
   color: #ffffff;
@@ -215,6 +215,7 @@ html, body {
   visibility: hidden;
 }
 
+/* Number glyph styling: use relative top so movement is reliable across browsers */
 .key .num {
   display: block;
   font-weight: 600;
@@ -222,7 +223,12 @@ html, body {
   font-size: 34px;
   color: white !important;
   text-shadow: 0 2px 10px rgba(0,0,0,0.45);
-  transform: translateY(6px);
+
+  /* More robust method — use relative positioning to nudge down */
+  position: relative;
+  top: 6px;         /* <-- nudges digits downward; adjust this value to taste */
+  transform: none;  /* ensure previous transforms don't interfere */
+  -webkit-transform: none;
 }
 .key .letters {
   display: block;
@@ -506,7 +512,3 @@ html, body {
     filter: blur(4px) !important;
   }
 }
-
-
-
-
