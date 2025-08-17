@@ -226,7 +226,7 @@ html, body {
 
   /* More robust method — use relative positioning to nudge down */
   position: relative;
-  top: 6px;         /* <-- nudges digits downward; adjust this value to taste */
+  top: 4px;         /* <-- nudges digits downward; adjust this value to taste */
   transform: none;  /* ensure previous transforms don't interfere */
   -webkit-transform: none;
 }
@@ -512,3 +512,4 @@ html, body {
     filter: blur(4px) !important;
   }
 }
+
