@@ -112,8 +112,8 @@ html, body {
 
 /* ---------- NEW prompt styles (tuned to screenshot) ---------- */
 .prompt-container{
-  /* keep prompt visually above the dots & keypad exactly like the screenshot */
-  margin-top: 6px; /* slight nudge to align visually with screenshot */
+  /* moved slightly up so title and subtitle sit closer to the notch area like screenshot */
+  margin-top: -8px; /* <-- changed from 6px to -8px to nudge upward */
   text-align: center;
   z-index: 3;
   pointer-events: none;
@@ -125,25 +125,25 @@ html, body {
 .prompt-title {
   margin: 0;
   font-weight: 500;        /* <-- changed to lighter weight per request */
-  font-size: 28px;          /* tuned to screenshot */
+  font-size: 26px;          /* <-- slightly smaller than before (was 28px) */
   line-height: 1.05;
   letter-spacing: 0.2px;
   color: #ffffff;
   text-shadow: 0 6px 18px rgba(0,0,0,0.65);
   -webkit-font-smoothing: antialiased;
-  margin-bottom: 8px;
+  margin-bottom: 6px; /* tightened spacing under title */
 }
 
 /* Subtitle exactly like screenshot: two-line, centered and slightly lighter */
 .prompt-sub {
   margin: 0;
   font-weight: 400;
-  font-size: 15px;          /* tuned to screenshot */
+  font-size: 14.5px;          /* slightly reduced (was 15px) */
   line-height: 1.15;
   color: rgba(255,255,255,0.92);
   text-shadow: 0 3px 10px rgba(0,0,0,0.6);
   opacity: 0.98;
-  margin-bottom: 18px;      /* space before dots */
+  margin-bottom: 14px;      /* reduced space before dots to pull keypad up */
   white-space: pre-line;    /* allow the <br> in HTML to create two lines */
 }
 
@@ -151,7 +151,7 @@ html, body {
 .dots {
   display: flex;
   gap: 14px;
-  margin-bottom: 28px;
+  margin-bottom: 18px; /* reduced from 28px to bring keypad closer to subtitle, matching screenshot */
   pointer-events: none;
   z-index: 3;
   will-change: transform;
@@ -181,7 +181,7 @@ html, body {
   gap: var(--gap-y) var(--gap-x);
   justify-content: center;
   align-items: center;
-  margin-top: 50px;
+  margin-top: 28px; /* reduced from 50px — nudges the 0-9 keys upward to match screenshot */
   z-index: 3;
 }
 
