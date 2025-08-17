@@ -374,7 +374,8 @@ html, body {
     Updated visual to match the frosted keys:
     - layered glossy background (top highlight + darker lower area)
     - frosted backdrop-filter
-    - a full pill outline (non-inset ring) so the ring wraps the entire pill
+    - strong visible full-pill outline without increasing thickness
+    - subtle glow to help the ring pop
   */
   background:
     linear-gradient(180deg,
@@ -389,10 +390,11 @@ html, body {
   backdrop-filter: blur(8px) saturate(0.95);
   -webkit-backdrop-filter: blur(8px) saturate(0.95);
 
-  /* outer depth + full pill ring + inset stroke (stronger per request) */
+  /* outer depth + full pill ring + inset stroke (stronger visibility, same thickness) */
   box-shadow:
     0 20px 48px rgba(0,0,0,0.62),          /* slightly stronger outer shadow for depth */
-    0 0 0 1.5px rgba(255,255,255,0.08),    /* FULL pill outline (non-inset) — wraps whole pill */
+    0 0 0 1.5px rgba(255,255,255,0.16),    /* FULL pill outline (same thickness, higher alpha for visibility) */
+    0 0 10px rgba(255,255,255,0.06),       /* soft glow to make the ring pop without enlarging it */
     0 0 0 1px rgba(255,255,255,0.06) inset,/* stronger thin inner light stroke */
     0 1px 0 rgba(255,255,255,0.12) inset;  /* slightly brighter top highlight edge */
 
