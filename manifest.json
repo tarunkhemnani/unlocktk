@@ -1,6 +1,6 @@
 {
   "name": "iPhone Keypad",
-  "short_name": "Keypad",
+  "short_name": "Snapseed",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#000000",
@@ -11,3 +11,4 @@
     { "src": "apple-touch-icon-180.png", "sizes": "180x180", "type": "image/png" }
   ]
 }
+
