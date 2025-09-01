@@ -1,71 +1,119 @@
-const CACHE_NAME = 'passcode-cache-v1';
-const ASSETS_TO_CACHE = [
+// service-worker.js — cache-first navigations + robust install for iOS reliability.
+
+const CACHE_VERSION = 'passcode-cache-v2';
+const CACHE_NAME = CACHE_VERSION;
+
+// Precache assets; keep list lean to reduce eviction risk on iOS
+const ASSETS = [
   './',
   './index.html',
   './styles.css',
   './app.js',
-  './manifest.json',
+  './manifest.json',          // index.html references "manifest.json"
+  './manifesh.json',          // tolerate the misspelled file if it exists
   './icon-192.png',
   './icon-512.png',
   './apple-touch-icon-180.png',
   './wallpaper.jpg',
-  './homescreen.jpg'
+  './homescreen.jpg',
+  './service-worker.js'
 ];
 
-// Install: cache app shell
-self.addEventListener('install', event => {
+self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS_TO_CACHE))
+    caches.open(CACHE_NAME).then(async (cache) => {
+      try {
+        // Try addAll first
+        await cache.addAll(ASSETS);
+      } catch (err) {
+        // Fallback: add one-by-one; ignore failures so install still completes
+        await Promise.all(ASSETS.map(async (url) => {
+          try { await cache.add(url); } catch (e) { /* ignore missing */ }
+        }));
+      }
+    })
   );
 });
 
-// Activate: clean old caches
-self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys().then(keys => Promise.all(
-      keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
-    )).then(() => self.clients.claim())
-  );
+self.addEventListener('activate', (event) => {
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)));
+    await self.clients.claim();
+  })());
 });
 
-// Fetch: cache-first for static assets, network-first for navigation (HTML)
-self.addEventListener('fetch', event => {
+self.addEventListener('fetch', (event) => {
   const req = event.request;
-  const url = new URL(req.url);
+  if (req.method !== 'GET') return;
 
-  // For navigation (HTML pages) — try network first, fallback to cache
-  if (req.mode === 'navigate' || (req.method === 'GET' && req.headers.get('accept')?.includes('text/html'))) {
-    event.respondWith(
-      fetch(req).then(res => {
-        // update cache with latest index.html
-        const copy = res.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put('./index.html', copy));
-        return res;
-      }).catch(() => caches.match('./index.html'))
-    );
+  const accept = req.headers.get('accept') || '';
+  const isHTMLNavigation = req.mode === 'navigate' || accept.includes('text/html');
+
+  if (isHTMLNavigation) {
+    event.respondWith(handleNavigation(event));
     return;
   }
 
-  // For other GET requests (assets) — respond from cache first, then network
-  if (req.method === 'GET') {
-    event.respondWith(
-      caches.match(req).then(cached => {
-        if (cached) return cached;
-        return fetch(req).then(networkRes => {
-          // cache fetched asset for future
-          return caches.open(CACHE_NAME).then(cache => {
-            // avoid caching cross-origin requests (e.g., analytics) to keep cache small
-            if (url.origin === self.location.origin) {
-              cache.put(req, networkRes.clone());
-            }
-            return networkRes;
-          });
-        }).catch(() => {
-          // final fallback: try to return a cached index (for images/pages)
-          return caches.match('./index.html');
-        });
-      })
-    );
+  event.respondWith(cacheFirst(req));
+});
+
+// Cache-first navigations with background revalidate (stale-while-revalidate)
+async function handleNavigation(event) {
+  const cache = await caches.open(CACHE_NAME);
+  const INDEX = './index.html';
+
+  // Serve cached shell immediately if present
+  const cached = await cache.match(INDEX);
+  if (cached) {
+    event.waitUntil((async () => {
+      try {
+        const res = await fetch(INDEX, { cache: 'no-cache' });
+        if (res && res.ok) await cache.put(INDEX, res.clone());
+      } catch (e) { /* offline */ }
+    })());
+    return cached;
+  }
+
+  // First run: try network, then fallback
+  try {
+    const res = await fetch(event.request);
+    if (res && res.ok) {
+      try { await cache.put(INDEX, res.clone()); } catch (e) {}
+    }
+    return res;
+  } catch (e) {
+    const fallback = await cache.match(INDEX);
+    if (fallback) return fallback;
+    return new Response('<!doctype html><title>Offline</title><h1>Offline</h1>', {
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 503, statusText: 'Service Unavailable'
+    });
+  }
+}
+
+// Cache-first for static assets, with graceful fallbacks
+async function cacheFirst(request) {
+  const cache = await caches.open(CACHE_NAME);
+  const cached = await cache.match(request);
+  if (cached) return cached;
+
+  try {
+    const res = await fetch(request);
+    if (res && res.ok && new URL(request.url).origin === self.location.origin) {
+      try { await cache.put(request, res.clone()); } catch (e) {}
+    }
+    return res;
+  } catch (e) {
+    // No generic binary fallback here; rely on index.html for navigations
+    return new Response(null, { status: 503, statusText: 'Service Unavailable' });
+  }
+}
+
+// Support SKIP_WAITING from page
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
   }
 });
